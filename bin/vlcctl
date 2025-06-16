@@ -1,0 +1,157 @@
+#!/bin/bash
+
+CVLC_RC_HOST="localhost"
+CVLC_RC_PORT="1234"
+
+
+# stats a vlc rc process (use with & if you don't want to be interrupted)
+vlcStart () {
+    cvlc --extraintf rc --rc-host "$CVLC_RC_HOST:$CVLC_RC_PORT"
+}
+
+# This command must be piped-appended to an "echo query"
+# it sends input to vlc-rc process and print back in output what vlc-rc responds
+vlcQuery () {
+    netcat -q 1 "$CVLC_RC_HOST" "$CVLC_RC_PORT"
+}
+
+# send a RC command to VLC
+vlcCommand () {
+    echo "$1" | vlcQuery
+}
+
+# quit vlc
+vlcQuit () {
+    vlcCommand quit
+}
+
+# adds a new file at the end of the current playlist
+# $1 : file
+vlcAddFileToPlaylist () {
+    vlcCommand "enqueue $1"
+}
+
+# clear current playlist
+vlcClearPlaylist () {
+    vlcCommand clear
+}
+
+# start playing
+vlcPlay () {
+    vlcCommand play
+}
+
+# stop playing
+vlcStop () {
+    vlcCommand stop
+}
+
+# play next song
+vlcNext () {
+    vlcCommand next
+}
+
+# play previous song
+vlcPrev () {
+    vlcCommand prev
+}
+
+# pause playing
+vlcPause () {
+    vlcCommand pause
+}
+
+# get info from stream
+# $1 : command
+vlcGetInfo () {
+    sCommand="$1"
+    sResult=$(vlcCommand "$sCommand" | grep -e "^>\s" | head -n 1)
+    echo ${sResult:2}
+}
+
+# get song title
+vlcGetTitle () {
+    vlcGetInfo get_title
+}
+
+# return 1 if media is playin, 0 else
+vlcIsPlaying () {
+    vlcGetInfo is_playing
+}
+
+# Returns the ellapsed time
+vlcGetTime () {
+    vlcGetInfo get_time
+}
+
+# Returns total time of current file
+vlcGetLength () {
+    vlcGetInfo get_length
+}
+
+# Return folder content
+# all files are given with absolute path
+getFolderContent () {
+    sLocation="$1"
+    find "$sLocation" -maxdepth 1 -type f \( \
+        -iname "*.mid" -o \
+        -iname "*.mp3" -o \
+        -iname "*.mod" -o \
+        -iname "*.s3m" -o \
+        -iname "*.it" -o \
+        -iname "*.xm" -o \
+        -iname "*.669" -o \
+        -iname "*.stm" \
+    \) -exec readlink -f {} \;
+}
+
+# $1 : All files in folder, will be added to playlist in filesystem order
+vlcAddFolderToPlaylist () {
+    OLD_IFS="$IFS"
+    getFolderContent "$1" | while IFS= read -r sFile; do
+        echo "enqueue $sFile"
+    done | vlcQuery
+    IFS=$OLD_IFS
+}
+
+
+# $1 : All files in folder, will be added to playlist in a random order
+vlcAddShuffledFolderToPlaylist () {
+    OLD_IFS="$IFS"
+    getFolderContent "$1" | shuf | while IFS= read -r sFile; do
+        echo "enqueue $sFile"
+    done | vlcQuery
+    IFS=$OLD_IFS
+}
+
+vlcStatus () {
+    echo "{"
+    echo "  \"status\": \"$(vlcCommand status)\","
+    echo "  \"playing\": \"$(vlcCommand is_playing)\","
+    echo "  \"title\": \"$(vlcCommand title)\","
+    echo "  \"time\": $(vlcCommand time),"
+    echo "  \"length\": $(vlcCommand length)"
+    echo "}"
+}
+
+vlcWaitUntilEndOfPlaylist () {
+    local isPlaying="1"
+    while [ $isPlaying -eq 1 ]
+    do
+        sleep 5
+        isPlaying=$(vlcIsPlaying)
+        if [ $isPlaying -eq 0 ]
+        then
+            echo "Fin de la playlist détectée."
+        fi
+    done
+}
+
+vlcStop
+vlcClearPlaylist
+vlcAddShuffledFolderToPlaylist ~/Musique/midis/Doom
+vlcPlay
+vlcGetTitle
+vlcIsPlaying
+vlcGetLength
+
