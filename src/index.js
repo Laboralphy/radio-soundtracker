@@ -1,9 +1,11 @@
-const VLCControl = require('./VLCControl');
+const VLCControl = require('./libs/vlc-control/VLCControl');
 
 
 async function main () {
-    const vlcctl = new VLCControl();
-    const aMessages = await vlcctl.sendTransaction('status');
+    const vlcctl = new VLCControl({
+        timeout: 250
+    });
+    const aMessages = await vlcctl.getTime();
     console.log(aMessages);
 }
 

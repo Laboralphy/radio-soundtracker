@@ -147,11 +147,12 @@ vlcWaitUntilEndOfPlaylist () {
     done
 }
 
-vlcStop
-vlcClearPlaylist
-vlcAddShuffledFolderToPlaylist ~/Musique/midis/Doom
-vlcPlay
-vlcGetTitle
-vlcIsPlaying
-vlcGetLength
+# vlcStop
+# vlcClearPlaylist
+# vlcAddShuffledFolderToPlaylist ~/Musique/midis/Doom
+# vlcPlay
+# vlcGetTitle
+# vlcIsPlaying
+# vlcGetLength
+vlcCommand status
 
