@@ -1,0 +1,4 @@
+module.exports = {
+    EVENT_PLAYLIST_END: 'EVENT_PLAYLIST_END',
+    EVENT_NEW_SONG: 'EVENT_NEW_SONG'
+};

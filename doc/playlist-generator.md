@@ -85,4 +85,23 @@ La date du serveur est utilisée pour modifier le lastplay
 
 Le programme doit pouvoir surveiller VLC afin de déterminer la fin de la lecture de la playlist.
 
+Lorsqu'un playlist se termine, il faut en générer une autre.
+
+Il faut définir des thèmes
+
+
+[
+    {
+        id: 1,
+        name: 'Doom 1 & 2 OST',
+        location: '../../Musiques/midis/Doom',
+        shuffle: true,
+        shortDescription: 'Doom 1 & 2 original soundtrack (1993)',
+        longDescription: [
+            'Doom 1 & 2 original soundtrack',
+            'Composed around 1993... I guess...',
+            'Extracted from WAD and converted from .MUS files to .MID',
+        ]
+    },
+]
 

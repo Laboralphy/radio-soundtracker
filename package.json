@@ -13,6 +13,10 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
-    "eslint": "^9.29.0"
+    "eslint": "^9.29.0",
+    "jest": "^30.0.0"
+  },
+  "dependencies": {
+    "yargs": "^18.0.0"
   }
 }
