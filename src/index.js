@@ -1,6 +1,8 @@
 const { PlaylistControl, VLCControl } = require('./libs/vlc-control');
 const EVENTS = require('./libs/vlc-control/Events');
 
+
+
 async function main () {
     const plc = new PlaylistControl({
         vlc: new VLCControl({ timeout: 150 })
