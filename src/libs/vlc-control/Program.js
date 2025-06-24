@@ -1,65 +1,78 @@
-const TreeAsync = require('../o876-xtree/async');
-const path = require('node:path');
-const fs = require('node:fs/promises');
-
-const SONGFILE_EXTENSIONS = [
-    'mid',
-    'mp3',
-    'mod',
-    's3m',
-    'stm',
-    'xm',
-    'it'
-];
+const ProgramEntry = require('./ProgramEntry');
+const {PROGRAM_ENTRY_TYPES} = require('./consts');
 
 class Program {
-    constructor () {
-        this._program = [];
+    /**
+     *
+     * @param programs {ProgramEntry[]}
+     */
+    constructor ({
+        programs = [],
+    } = {}) {
+        /**
+         * @type {ProgramEntry[]}
+         * @private
+         */
+        this._entries = programs;
     }
 
-    async addResource (sResource) {
-        const bFolder = await this.isFolder(sResource);
-        if (bFolder) {
-            this._program.push({
-                folder: true,
-                location: sResource
-            });
-        } else {
-            this._program.push({
-                folder: false,
-                location: sResource
-            });
-        }
+    get entries () {
+        return this._entries;
+    }
+
+    addEntry ({
+        type,
+        location = '',
+        program = null,
+        shuffle = false,
+        limit = Infinity,
+    }) {
+        this.entries.push(new ProgramEntry({
+            type,
+            location,
+            program,
+            shuffle,
+            limit
+        }));
     }
 
     addFolder (sLocation, { shuffle = false, limit = Infinity } = {}) {
-        this._program.push({
-            folder: true,
+        this.addEntry({
+            type: PROGRAM_ENTRY_TYPES.FOLDER,
             location: sLocation,
             shuffle,
             limit
         });
     }
 
-    addSong (sSongFile) {
-        this._program.push({
-            folder: true,
-            location: sSongFile
+    addSong (sFile) {
+        this.addEntry({
+            type: PROGRAM_ENTRY_TYPES.SONG,
+            location: sFile
         });
     }
 
-    async isFolder (sLocation) {
-        const oStat = await fs.stat(sLocation);
-        return oStat.isDirectory();
+    /**
+     * @param oProgram {Program}
+     */
+    addProgram (oProgram) {
+        if (oProgram instanceof Program) {
+            this.addEntry({
+                type: PROGRAM_ENTRY_TYPES.PROGRAM,
+                program: oProgram
+            });
+        }
     }
 
-    getFolderContent (sBasePath, aExtensions = []) {
-        const aLowerExts = aExtensions.map(s => '.' + s.toLowerCase());
-        return TreeAsync
-            .tree(sBasePath)
-            .then(aFiles => aFiles
-                .filter(s => aLowerExts.length === 0 || aLowerExts.includes(path.extname(s).toLowerCase()))
-                .map(s => path.resolve(sBasePath, s))
-            );
+    /**
+     *
+     * @returns {Promise<string[]>}
+     */
+    async renderList () {
+        return Promise
+            .all(this._entries.map(p => p.renderList()))
+            .then(p => p.flat());
     }
 }
+
+module.exports = Program;

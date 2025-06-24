@@ -1,8 +1,8 @@
 const VLCControl = require('./VLCControl');
-const EVENTS = require('./Events');
+const { EVENTS } = require('./consts');
 const Events = require('node:events');
 
-class PlaylistControl {
+class ProgramPlayer {
     constructor ({ vlc = undefined } = {}) {
         this._vlcctl = null;
         if (vlc) {
@@ -11,7 +11,7 @@ class PlaylistControl {
         this._remainingTime = 0;
         this._doomLoopTimerId = 0;
         this._events = new Events();
-        this._lastFile  = '';
+        this._lastPlayedFile  = '';
     }
 
     get vlc () {
@@ -24,6 +24,9 @@ class PlaylistControl {
         }
     }
 
+    /**
+     * @returns {EventEmitter}
+     */
     get events () {
         return this._events;
     }
@@ -31,9 +34,14 @@ class PlaylistControl {
     async getSongFile () {
         const status = await this.vlc.getStatus();
         const sFirstLine = status.split('\n').shift();
-        const r = sFirstLine.match(/\(new input:\s+(.*)\)$/);
+        const r = sFirstLine.match(/\(\s+new input:\s+(.*)\s*\)$/);
         if (r) {
-            return r[1];
+            const sSongFileFullName = r[1];
+            const oParsedFileName = URL.parse(sSongFileFullName);
+            return oParsedFileName ? oParsedFileName.pathname : sSongFileFullName;
+        } else {
+            console.log(status);
+            return '';
         }
     }
 
@@ -46,11 +54,14 @@ class PlaylistControl {
         const sTitle = await this.vlc.getTitle();
         const sFileName = await this.getSongFile();
         this._remainingTime = remaining;
-        this._events.emit(EVENTS.EVENT_NEW_SONG, {
-            title: sTitle,
-            remainingTime: remaining,
-            file: sFileName
-        });
+        if (this._lastPlayedFile !== sFileName) {
+            this._lastPlayedFile = sFileName;
+            this._events.emit(EVENTS.EVENT_NEW_SONG, {
+                title: sTitle,
+                remainingTime: remaining,
+                file: sFileName
+            });
+        }
     }
 
     async doomLoop () {
@@ -63,14 +74,15 @@ class PlaylistControl {
             await this.triggerNewSong();
         } else {
             this.stopDoomLoop();
-            this._events.emit(EVENTS.EVENT_PLAYLIST_END);
         }
     }
 
     stopDoomLoop () {
         if (this._doomLoopTimerId > 0) {
+            this._remainingTime = 0;
             clearInterval(this._doomLoopTimerId);
             this._doomLoopTimerId = 0;
+            this._events.emit(EVENTS.EVENT_PLAYLIST_END);
         }
     }
 
@@ -79,16 +91,21 @@ class PlaylistControl {
         this._doomLoopTimerId = setInterval(() => this.doomLoop(), 1000);
     }
 
-    playFolder (sPath) {
+    /**
+     *
+     * @param oProgram {Program}
+     * @returns {Promise<unknown>}
+     */
+    playProgram (oProgram) {
         return new Promise(resolve => {
             this._events.once(EVENTS.EVENT_PLAYLIST_END, () => resolve());
             return this
                 .vlc
-                .doPlayFolder(sPath)
+                .doPlayProgram(oProgram)
                 .then(() => this.triggerNewSong())
                 .then(() => this.startDoomLoop());
         });
     }
 }
 
-module.exports = PlaylistControl;
+module.exports = ProgramPlayer;

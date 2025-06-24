@@ -1,6 +1,6 @@
 module.exports = {
+    CONSTS: require('./consts'),
     VLCControl: require('./VLCControl'),
-    PlaylistControl: require('./PlaylistControl'),
-    Theme: require('./Theme'),
-    Events: require('./Events')
+    ProgramPlayer: require('./ProgramPlayer'),
+    Program: require('./Program')
 };

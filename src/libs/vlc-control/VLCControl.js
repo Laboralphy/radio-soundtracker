@@ -2,16 +2,6 @@ const net = require('node:net');
 const path = require('node:path');
 const TreeAsync = require('../o876-xtree/async');
 
-const SONGFILE_EXTENSIONS = [
-    'mid',
-    'mp3',
-    'mod',
-    's3m',
-    'stm',
-    'xm',
-    'it'
-];
-
 const CHECK_EOB = 'Bye-bye!';
 
 class VLCControl {
@@ -192,20 +182,15 @@ class VLCControl {
     }
 
     /**
-     * Loads all files in folder inside a new playlist and starts playing the list
-     * All files in subdirectories are also played
-     * @param sLocation {string} folder containing files
-     * @param shuffle {boolean} if true, the playlist will be shuffled
-     * @param limit {number} if greater thant
+     *
+     * @param oProgram {Program}
      * @returns {Promise<string>}
      */
-    async doPlayFolder (sLocation, { shuffle = false, limit = 0 } = {}) {
-        const aPlaylist = await this.getFolderContent(sLocation, SONGFILE_EXTENSIONS);
-        const aPlaylistShuffled = shuffle ? this.shuffleArray(aPlaylist) : aPlaylist;
-        const aPlaylistSliced = limit > 0 ? aPlaylistShuffled.slice(0, limit) : aPlaylistShuffled;
+    async doPlayProgram (oProgram) {
         await this.doStop();
         await this.doClearPlaylist();
-        await this.doEnqueue(aPlaylistSliced);
+        const aList = await oProgram.renderList();
+        await this.doEnqueue(aList);
         return this.doPlay();
     }
 
@@ -297,7 +282,6 @@ class VLCControl {
     getVolume () {
         return this.sendTransaction('volume');
     }
-
 }
 
 module.exports = VLCControl;

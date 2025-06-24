@@ -1,4 +1,4 @@
-const VLCControl = require('../src/libs/vlc-control');
+const { VLCControl } = require('../src/libs/vlc-control');
 
 describe('parseResponse', function () {
     it('should return [[\'alpha\']] when parsing [\'> alpha\']', function () {
@@ -25,5 +25,4 @@ describe('parseResponse', function () {
         ]);
         expect(a).toEqual([['alpha', 'beta'], ['gamma']]);
     });
-    it('should return [[\'alpha');
 });

@@ -17,6 +17,7 @@
     "jest": "^30.0.0"
   },
   "dependencies": {
+    "node-cron": "^4.1.1",
     "yargs": "^18.0.0"
   }
 }
