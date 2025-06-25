@@ -13,5 +13,3 @@
 - à différents horaires selon le contenu du `cron-tab`, j'interromps le `programme-par-defaut` et je lance un `programme-spécial`.
 - lorsqu'un `programme-spécial` s'arrête, je retourne au `programme-par-defaut`.
 - ces horaires sont définis dans un système `cron-tab` applicatif
-
-
