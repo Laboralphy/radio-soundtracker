@@ -1,28 +1,31 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
-class TreeSync {
-    static exists (sPath) {
+interface FileEntry {
+    name: string;
+    dir: boolean;
+}
+
+export class TreeSync {
+    static exists(sPath: string): boolean {
         try {
             return !!fs.statSync(sPath);
-        } catch (e) {
+        } catch {
             return false;
         }
     }
 
-    static ls (sPath) {
-        const list = fs.readdirSync(sPath, {
-            withFileTypes: true
-        });
+    static ls(sPath: string): FileEntry[] {
+        const list = fs.readdirSync(sPath, { withFileTypes: true });
         return list.map(f => ({
             name: f.name,
             dir: f.isDirectory()
         }));
     }
 
-    static tree (sPath) {
+    static tree(sPath: string): string[] {
         const aFiles = TreeSync.ls(sPath);
-        const aEntries = [];
+        const aEntries: string[] = [];
         for (let i = 0, l = aFiles.length; i < l; ++i) {
             const { name, dir } = aFiles[i];
             if (dir) {
@@ -36,5 +39,3 @@ class TreeSync {
         return aEntries;
     }
 }
-
-module.exports = TreeSync;

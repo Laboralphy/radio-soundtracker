@@ -1,0 +1,26 @@
+{
+  "demandCommand": "Veuillez spécifier une commande.",
+  "check": {
+    "describe": "Vérifie si VLC est accessible",
+    "options": {
+      "host": "Hôte VLC RC",
+      "port": "Port VLC RC",
+      "timeout": "Délai de connexion (ms)"
+    },
+    "reachable": "VLC est accessible (statut : {{status}})",
+    "unreachable": "VLC n'est pas accessible : {{err}}"
+  },
+  "play": {
+    "describe": "Arrête et remplace la playlist courante",
+    "options": {
+      "location": "Emplacement des fichiers musicaux",
+      "recursive": "Ajoute récursivement les fichiers des sous-dossiers",
+      "shuffle": "Mélange la playlist avant lecture",
+      "count": "Garde uniquement les N premiers éléments (après mélange éventuel)",
+      "time": "Arrête la lecture après cette durée (ex : 1h, 30min, 01:30:00)"
+    },
+    "nowPlaying": "En cours : {{title}} ({{remaining}}s restantes)",
+    "timeLimitReached": "Durée limite atteinte ({{time}}), arrêt de la lecture",
+    "done": "Playlist terminée"
+  }
+}

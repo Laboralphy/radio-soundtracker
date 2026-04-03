@@ -1,23 +1,50 @@
 {
   "name": "radio-soundtracker",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.js",
   "directories": {
     "doc": "doc"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "test": "vitest",
+    "lint": "eslint src",
+    "vlcctl:start": "./bin/vlcctl",
+    "vlcctl:stop": "./bin/vlcctl -q && echo \"VLC was running\" || echo \"VLC was not running\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
-  "devDependencies": {
-    "eslint": "^9.29.0",
-    "jest": "^30.0.0"
-  },
   "dependencies": {
+    "i18next": "^26.0.3",
+    "i18next-fs-backend": "^2.6.3",
     "node-cron": "^4.1.1",
+    "tsx": "^4.21.0",
+    "winston": "^3.19.0",
+    "winston-daily-rotate-file": "^5.0.0",
     "yargs": "^18.0.0"
-  }
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "@types/yargs": "^17.0.35",
+    "esbuild": "^0.27.7",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "prettier": "^3.8.1",
+    "typescript": "^6.0.2",
+    "typescript-eslint": "^8.58.0",
+    "vitest": "^4.1.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Laboralphy/radio-soundtracker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Laboralphy/radio-soundtracker/issues"
+  },
+  "homepage": "https://github.com/Laboralphy/radio-soundtracker#readme"
 }

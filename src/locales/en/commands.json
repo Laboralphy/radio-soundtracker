@@ -1,0 +1,26 @@
+{
+  "demandCommand": "Please specify a command.",
+  "check": {
+    "describe": "Check if VLC is reachable",
+    "options": {
+      "host": "VLC RC host",
+      "port": "VLC RC port",
+      "timeout": "Connection timeout (ms)"
+    },
+    "reachable": "VLC is reachable (status: {{status}})",
+    "unreachable": "VLC is not reachable: {{err}}"
+  },
+  "play": {
+    "describe": "Stop and replace the current playlist",
+    "options": {
+      "location": "Music files location",
+      "recursive": "Recursively add files from subdirectories",
+      "shuffle": "Shuffle playlist before playing",
+      "count": "Keep only the first N items (after shuffle if any)",
+      "time": "Stop playing after this duration (e.g. 1h, 30min, 01:30:00)"
+    },
+    "nowPlaying": "Now playing: {{title}} ({{remaining}}s remaining)",
+    "timeLimitReached": "Time limit reached ({{time}}), stopping playback",
+    "done": "Playlist finished"
+  }
+}

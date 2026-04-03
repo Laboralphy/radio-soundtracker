@@ -1,3 +1,11 @@
-node_modules
+# Node JS modules
+node_modules/
+
+# IntelliJ setup folder
 .idea
+
+# Environment variable
 .env
+
+# Log file locations
+logs/

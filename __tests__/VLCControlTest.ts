@@ -1,15 +1,16 @@
-const { VLCControl } = require('../src/libs/vlc-control');
+import { describe, it, expect } from 'vitest';
+import { VLCConnection } from '../src/libs/vlc-control/VLCConnection.js';
 
 describe('parseResponse', function () {
     it('should return [[\'alpha\']] when parsing [\'> alpha\']', function () {
-        const v = new VLCControl();
+        const v = new VLCConnection();
         const a = v.parseResponse([
             '> alpha'
         ]);
         expect(a).toEqual([['alpha']]);
     });
     it('should return [["alpha", "beta"]] when parsing ["> alpha", "beta"]', function () {
-        const v = new VLCControl();
+        const v = new VLCConnection();
         const a = v.parseResponse([
             '> alpha',
             'beta'
@@ -17,7 +18,7 @@ describe('parseResponse', function () {
         expect(a).toEqual([['alpha', 'beta']]);
     });
     it('should return [["alpha", "beta"], ["gamma"]] when parsing ["> alpha", "beta", "> gamma"]', function () {
-        const v = new VLCControl();
+        const v = new VLCConnection();
         const a = v.parseResponse([
             '> alpha',
             'beta',
