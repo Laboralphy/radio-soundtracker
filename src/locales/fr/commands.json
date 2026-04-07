@@ -20,6 +20,7 @@
       "time": "Arrête la lecture après cette durée (ex : 1h, 30min, 01:30:00)"
     },
     "nowPlaying": "En cours : {{title}} ({{remaining}}s restantes)",
+    "newSong": "Lecture: {{title}} (durée: {{duration}}s)",
     "timeLimitReached": "Durée limite atteinte ({{time}}), arrêt de la lecture",
     "done": "Playlist terminée"
   }

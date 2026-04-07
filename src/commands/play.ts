@@ -20,7 +20,7 @@ async function handler(argv: ArgumentsCamelCase<PlayOptions>): Promise<void> {
     const plc = new ProgramPlayer({ vlc });
 
     plc.events.on(EVENTS.EVENT_NEW_SONG, ({ title, remainingTime }: { title: string; remainingTime: number; file: string }) => {
-        logger.info(t('play.nowPlaying', { title, remaining: remainingTime }));
+        logger.info(t('play.newSong', { title, duration: remainingTime }));
     });
     plc.events.on(EVENTS.EVENT_ERROR, (err: unknown) => {
         logger.error(`Playback error: ${err}`);

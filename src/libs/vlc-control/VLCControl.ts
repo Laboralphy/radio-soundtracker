@@ -81,7 +81,7 @@ export class VLCControl {
     }
 
     async getTime(): Promise<TimeInfo> {
-        const result = await this._connection.sendTransaction('get_time');
+        const result = await this._connection.sendTransaction('get_time\nget_length');
         const [timePart = '', lengthPart = ''] = result.split('\n');
         const nTime = Number.parseInt(timePart);
         const nLength = Number.parseInt(lengthPart);
