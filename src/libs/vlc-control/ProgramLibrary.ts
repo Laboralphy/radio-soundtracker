@@ -33,8 +33,12 @@ export class ProgramLibrary {
      * Creates a Program from a ProgramDefinition without registering it.
      * Program-type entries must reference names already registered in this library.
      */
+    entries(): IterableIterator<[string, Program]> {
+        return this._programs.entries();
+    }
+
     createFromDefinition(definition: ProgramDefinition): Program {
-        const program = new Program();
+        const program = new Program({ cron: definition.cron });
         for (const entry of definition.entries) {
             switch (entry.type) {
                 case 'song':

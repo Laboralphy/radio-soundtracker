@@ -10,6 +10,13 @@
     "reachable": "VLC est accessible (statut : {{status}})",
     "unreachable": "VLC n'est pas accessible : {{err}}"
   },
+  "schedule": {
+    "describe": "Démarre le planificateur de programmes depuis un fichier de config",
+    "options": {
+      "config": "Chemin vers le fichier JSON de configuration"
+    },
+    "stopping": "Arrêt du planificateur..."
+  },
   "play": {
     "describe": "Arrête et remplace la playlist courante",
     "options": {

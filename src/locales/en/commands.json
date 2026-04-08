@@ -10,6 +10,13 @@
     "reachable": "VLC is reachable (status: {{status}})",
     "unreachable": "VLC is not reachable: {{err}}"
   },
+  "schedule": {
+    "describe": "Start the program scheduler from a config file",
+    "options": {
+      "config": "Path to the schedule config JSON file"
+    },
+    "stopping": "Stopping scheduler..."
+  },
   "play": {
     "describe": "Stop and replace the current playlist",
     "options": {

@@ -18,13 +18,24 @@ interface AddFolderOptions {
 
 interface ProgramOptions {
     programs?: ProgramEntry[];
+    cron?: string;
 }
 
 export class Program {
-    private _entries: ProgramEntry[];
+    private readonly _entries: ProgramEntry[];
+    private _cron: string;
 
-    constructor({ programs = [] }: ProgramOptions = {}) {
+    constructor({ programs = [], cron = '' }: ProgramOptions = {}) {
         this._entries = programs;
+        this._cron = cron;
+    }
+
+    get  cron(): string {
+        return this._cron;
+    }
+
+    set cron(s: string) {
+        this._cron = s;
     }
 
     get entries(): ProgramEntry[] {

@@ -29,8 +29,14 @@ export const ProgramEntryDefinitionSchema = z.discriminatedUnion('type', [
 
 export const ProgramDefinitionSchema = z.object({
     entries: z.array(ProgramEntryDefinitionSchema),
+    cron: z.string().optional().default(''),
 });
 
+export const ScheduleConfigSchema = z.object({
+    programs: z.record(z.string(), ProgramDefinitionSchema),
+});
+
+export type ScheduleConfig = z.infer<typeof ScheduleConfigSchema>;
 export type SongEntryDefinition = z.infer<typeof SongEntryDefinitionSchema>;
 export type FolderEntryDefinition = z.infer<typeof FolderEntryDefinitionSchema>;
 export type ProgramRefEntryDefinition = z.infer<typeof ProgramRefEntryDefinitionSchema>;
