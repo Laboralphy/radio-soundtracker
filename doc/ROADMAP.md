@@ -75,7 +75,7 @@ YouTube Live accepts **video only** over RTMP(S). An audio-only stream is reject
 
 **The key requirement:** the ffmpeg → YouTube connection must **never restart between songs**. A restart makes YouTube show "stream offline" and can end the live event. The encoder must be one long-running process fed by a continuous audio stream, and song changes happen *upstream* of it.
 
-### Decision to make: how audio reaches ffmpeg
+### How audio reaches ffmpeg (decided: B for Phase 1, C later)
 
 | Option | How | Pros | Cons |
 |---|---|---|---|
@@ -83,7 +83,52 @@ YouTube Live accepts **video only** over RTMP(S). An audio-only stream is reject
 | **B. Keep VLC, use a virtual sound card** | VLC plays to a PulseAudio/PipeWire null sink (or ALSA loopback), and ffmpeg captures `-f pulse -i radio.monitor` | Very robust and common for headless radios, and VLC stays unchanged | Needs a sound server in the container or VM. Gaps and silences are captured as-is. |
 | **C. Drop VLC: Node decodes with libopenmpt** | For each track, Node spawns `ffmpeg -i song.mod -f s16le -` (libopenmpt demuxer) or `openmpt123 --stdout`, and **writes the PCM into the stdin** of one persistent ffmpeg encoder | Full control: exact song boundaries, accurate lengths, crossfade or jingles possible, no RC socket, now-playing is known *exactly* | Rewrites `ProgramPlayer`. Node must keep the PCM pipe fed in real time (back-pressure, or insert silence on underrun). |
 
-**Recommendation:** to get on air quickly, use **B**. For the long-term engine, move to **C**. `Program`, `ProgramLibrary` and `ProgramScheduler` survive in both cases. Only the "player" behind them changes, so define a `Player` interface now (`playProgram`, `stop`, `events`) and make `ProgramPlayer` (VLC) one implementation of it.
+**Decision (2026-10-08):** Phase 1 uses **B**, with the video drawn by a separate image program (§2.1). It keeps all the VLC code and was validated by the proof of concept in `poc/`. **C** stays the long-term engine: accurate MOD lengths, gapless playback, and one clock for audio and video. The scheduler already depends only on the `Player` interface, so moving to C means writing a second `Player`.
+
+### 2.1 Notes from the design discussion (2026-10-08)
+
+**OBS Studio or ffmpeg?** Both can encode and send to YouTube; OBS is a desktop app with a visual scene editor, ffmpeg a command-line tool. For a server running unattended 24/7, ffmpeg is the better fit: no graphical session needed, light, and easy to start and supervise from Node. OBS uses the same kinds of encoders internally (x264, AAC).
+
+**YouTube needs video.** It does not accept audio alone: the stream must be H.264 video + AAC audio in FLV over RTMPS (`rtmps://a.rtmp.youtube.com/live2/<key>`), with a keyframe every 2 s.
+
+**One ffmpeg that never restarts.** Running one ffmpeg per song would drop the stream at each song change (viewers see buffering, YouTube may end the event). ffmpeg runs once, and song changes happen upstream of it.
+
+**Two ways to make the picture:**
+
+| | How | Good for |
+|---|---|---|
+| ffmpeg filters | `drawtext=textfile=now-playing.txt:reload=1` with expressions on `x`, `y`, `alpha` (scrolling, fades); `showwaves`, `showspectrum` for visualizers | Simple layouts, least CPU and code |
+| Separate image program | Any program writes raw RGBA frames to ffmpeg's stdin (`-f rawvideo -pix_fmt rgba -s WxH -r FPS -i pipe:0`). In Node, draw with `@napi-rs/canvas`. | Custom graphics: copper bars, VU meters, scrolling pattern data… |
+
+**VLC for sound, another program for images.** This is what `poc/` implements:
+
+```
+                 Node.js (scheduler)
+                 │  RC commands      │ JSON line per song change
+                 ▼                   ▼
+            ┌────────┐         ┌──────────────┐
+            │  VLC   │         │ image program│
+            └───┬────┘         └──────┬───────┘
+     plays into │                     │ raw RGBA frames (stdin)
+ null sink      ▼                     ▼
+          ┌───────────────────────────────────┐
+          │ ffmpeg: -f pulse -i radio.monitor │
+          │         -f rawvideo -i pipe:0     │──► YouTube
+          └───────────────────────────────────┘
+```
+
+- **Sound path:** a PulseAudio/PipeWire **null sink** (`pactl load-module module-null-sink sink_name=radio`). VLC plays into it (`PULSE_SINK=radio cvlc --aout pulse …`), and ffmpeg records its monitor (`-f pulse -i radio.monitor`). VLC behaves exactly as before, and gaps are recorded as silence. On a headless server the sound server must run as a service. Alternatives: ALSA loopback (`snd-aloop`, often not loadable on VPS or containers), or VLC `--sout … --sout-keep` into a pipe (fiddly, avoid).
+- **Two clocks:** audio capture follows the real clock, while a raw frame pipe follows the frame count, so a slow image program would make the video drift behind. The fix is to put both on the real clock and let ffmpeg even things out:
+  - `-use_wallclock_as_timestamps 1` on the frame input stamps each frame with its arrival time.
+  - `-fps_mode cfr -r 30` repeats or drops frames to keep exactly 30 fps, so the image program may send fewer frames while the picture is still.
+  - `-af aresample=async=1` corrects slow audio drift.
+  
+  The result is sync within a fraction of a second, which is fine for titles and animations (not for lip sync).
+- **Image program rules:**
+  - Pace frames to the real clock.
+  - Skip frames rather than fall behind.
+  - Never stop writing, or the picture freezes.
+  - Mind the data rate: 1280×720 RGBA at 30 fps is about 110 MB/s. Prefer 854×480, or draw only an animated strip and let ffmpeg `overlay` it on a static background.
 
 ---
 
@@ -98,15 +143,20 @@ YouTube Live accepts **video only** over RTMP(S). An audio-only stream is reject
 - [x] Commit an example `schedule.example.json` and document its format (currently only zod defines it).
 
 ### Phase 1 — Local audio → video pipeline (no YouTube yet)
-- [ ] Choose option A, B or C (§2) and write the decision down below.
-- [ ] Get a continuous audio stream into ffmpeg that does not break across song changes.
-- [ ] Video track:
-  - [ ] Start with a static 1280×720 image (`-loop 1 -framerate 30 -i bg.png`).
-  - [ ] Add a "Now playing: <title>" overlay with `drawtext=textfile=now-playing.txt:reload=1`. Node writes the file atomically (write to a temp file, then rename) on `EVENT_NEW_SONG`.
-  - [ ] Later, add an audio visualizer (`showwaves` / `showspectrum` / `avectorscope`) composited over the background.
-- [ ] Encode to the settings YouTube expects: H.264 (`-preset veryfast -tune stillimage`, CBR-ish `-b:v 1500k -maxrate 1500k -bufsize 3000k`), **keyframe every 2 s** (`-g 60` at 30 fps), `-pix_fmt yuv420p`, AAC 128–192 kbps 44.1/48 kHz stereo, `-f flv`.
-- [ ] Test by writing to a local file or a local RTMP server (`nginx-rtmp` or `mediamtx`), and play it back with `ffplay`/VLC.
+- [x] Choose option A, B or C (§2): **B + separate image program** (see §2.1 and the decisions log).
+- [x] Proof of concept in `poc/` (`npm run poc`), with results in `poc/README.md`:
+  - [x] Continuous audio from VLC through a null sink, with no break across song changes.
+  - [x] Image program (`poc/frames.ts`): copper bars, title sliding in or scrolling, file name, progress bar; fed by `EVENT_NEW_SONG`.
+  - [x] Output H.264 854×480 30 fps (keyframe every 2 s) + AAC 160k in FLV. Steady 30 fps; title change within about 0.1–0.2 s of the audio.
+- [ ] Turn the PoC into real code:
+  - [ ] A `broadcast` command (or an option of `schedule`) that runs scheduler, image program and ffmpeg together.
+  - [ ] Settings in config: sink name, resolution, fps, bitrates, output URL (file for tests, RTMPS for YouTube).
+  - [ ] Create the null sink if missing, and do not unload it if it already existed.
+  - [ ] Send the image program richer song info: total length (not just remaining time), program name, next song.
+- [ ] Final encoder settings: CBR-ish (`-maxrate` = `-b:v`, `-bufsize` = 2×), `-tune stillimage` if the picture stays mostly still, AAC 128–192 kbps. Check the CPU cost at 720p vs 480p.
+- [ ] Test through a local RTMP server (`mediamtx` or `nginx-rtmp`) and watch with `ffplay`, to match YouTube's real input.
 - [ ] Soak test: run 24 h locally, then check for A/V drift, memory growth in Node and ffmpeg, and gaps at song changes.
+- [ ] Decide what to show when VLC is down or between programs (the image program keeps running, so it can display "back soon").
 
 ### Phase 2 — First YouTube broadcast
 - [ ] On the YouTube channel, enable live streaming (it can take 24 h the first time) and create a **persistent stream key**.
@@ -117,7 +167,7 @@ YouTube Live accepts **video only** over RTMP(S). An audio-only stream is reject
 - [ ] **Rights and Content ID:** MOD files have authors. Prefer modules whose licence allows redistribution (many on The Mod Archive state a licence per file), keep a credits list, and expect some Content ID claims on famous tunes (game and demo soundtracks that were later re-released commercially).
 
 ### Phase 3 — Unattended 24/7 operation
-- [ ] **Process supervision:** `systemd` units, or `docker compose` with `restart: unless-stopped`, for each of: VLC (if kept), the Node scheduler and the ffmpeg encoder.
+- [ ] **Process supervision:** `systemd` units, or `docker compose` with `restart: unless-stopped`, for each of: the sound server (PulseAudio/PipeWire), VLC, the Node scheduler, the image program and the ffmpeg encoder.
 - [ ] **ffmpeg watchdog:** if ffmpeg exits or its output stalls (parse `-progress pipe:1`, or watch `out_time` stop moving), restart it immediately. Reconnects should take a few seconds, not minutes.
 - [ ] **Audio-silence watchdog:** if no new song arrives for longer than the longest track plus a margin, or the audio level stays at silence (ffmpeg `silencedetect`), alert and restart the audio source.
 - [ ] **Fallback audio:** if the scheduler crashes, ffmpeg should keep streaming a fallback (a looped jingle or "technical difficulties" track) instead of dropping the stream, for example through an `amix`/`azmq` input switch or a small relay.
@@ -160,4 +210,6 @@ YouTube Live accepts **video only** over RTMP(S). An audio-only stream is reject
 | 2026-10-08 | Roadmap created | Review of the playback/scheduling core |
 | 2026-10-08 | Phase 0 done | 59 tests; lint, typecheck and build fixed; checked live against VLC 3.0.23 (VLC crash and restart, broken cron program, SIGINT) |
 | 2026-10-08 | Scheduler depends on a `Player` interface (`src/libs/vlc-control/Player.ts`) | Lets option C (libopenmpt) replace VLC without touching the scheduler |
-| | Audio path: A / B / C? | *to decide in Phase 1* |
+| 2026-10-08 | Encode and send with **ffmpeg**, not OBS Studio | Headless, light, scriptable from Node; OBS needs a graphical session |
+| 2026-10-08 | Audio path **B** (VLC → PulseAudio null sink → ffmpeg) for Phase 1; **C** (libopenmpt in Node) as the later engine | Keeps the existing VLC code; validated by `poc/` |
+| 2026-10-08 | Video drawn by a **separate image program** (`@napi-rs/canvas`) piping raw RGBA frames; both ffmpeg inputs on the real clock | Free-form graphics; sync within about 0.2 s measured |

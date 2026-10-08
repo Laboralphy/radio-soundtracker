@@ -11,3 +11,6 @@ node_modules/
 logs/
 # Build output
 dist/
+
+# Proof of concept output
+poc/out/
