@@ -29,7 +29,9 @@ export class VLCControl {
 
     doEnqueue(xFile: string | string[]): Promise<string> {
         if (Array.isArray(xFile)) {
-            return this._connection.sendTransaction(xFile.map(s => 'enqueue ' + s).join('\n'));
+            return this._connection
+                .sendBatch(xFile.map(s => 'enqueue ' + s))
+                .then(aResponses => aResponses.join('\n'));
         } else {
             return this._connection.sendTransaction('enqueue ' + xFile);
         }
@@ -81,8 +83,7 @@ export class VLCControl {
     }
 
     async getTime(): Promise<TimeInfo> {
-        const result = await this._connection.sendTransaction('get_time\nget_length');
-        const [timePart = '', lengthPart = ''] = result.split('\n');
+        const [timePart = '', lengthPart = ''] = await this._connection.sendBatch(['get_time', 'get_length']);
         const nTime = Number.parseInt(timePart);
         const nLength = Number.parseInt(lengthPart);
         return {

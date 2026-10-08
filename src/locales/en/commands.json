@@ -1,12 +1,14 @@
 {
   "demandCommand": "Please specify a command.",
-  "check": {
-    "describe": "Check if VLC is reachable",
+  "vlc": {
     "options": {
       "host": "VLC RC host",
       "port": "VLC RC port",
       "timeout": "Connection timeout (ms)"
-    },
+    }
+  },
+  "check": {
+    "describe": "Check if VLC is reachable",
     "reachable": "VLC is reachable (status: {{status}})",
     "unreachable": "VLC is not reachable: {{err}}"
   },
@@ -15,7 +17,8 @@
     "options": {
       "config": "Path to the schedule config JSON file"
     },
-    "stopping": "Stopping scheduler..."
+    "stopping": "Stopping scheduler...",
+    "stopError": "Could not stop VLC: {{err}}"
   },
   "play": {
     "describe": "Stop and replace the current playlist",

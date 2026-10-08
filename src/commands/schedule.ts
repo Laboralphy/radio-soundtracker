@@ -8,8 +8,9 @@ import { ScheduleConfigSchema } from '../libs/vlc-control/program-definition.js'
 import { EVENTS } from '../libs/vlc-control/consts.js';
 import { logger } from '../libs/logger/index.js';
 import { t } from '../libs/i18n/index.js';
+import { withVLCOptions, type VLCOptions } from './vlc-options.js';
 
-interface ScheduleOptions {
+interface ScheduleOptions extends VLCOptions {
     config: string;
 }
 
@@ -22,7 +23,7 @@ async function handler(argv: ArgumentsCamelCase<ScheduleOptions>): Promise<void>
         library.define(name, definition);
     }
 
-    const vlc = new VLCControl();
+    const vlc = new VLCControl({ host: argv.host, port: argv.port, timeout: argv.timeout });
     const player = new ProgramPlayer({ vlc });
 
     player.events.on(EVENTS.EVENT_NEW_SONG, ({ title, remainingTime }: { title: string; remainingTime: number; file: string }) => {
@@ -35,13 +36,17 @@ async function handler(argv: ArgumentsCamelCase<ScheduleOptions>): Promise<void>
     const scheduler = new ProgramScheduler(library, player);
     scheduler.start();
 
-    const shutdown = () => {
+    const shutdown = async () => {
         logger.info(t('schedule.stopping'));
-        scheduler.stop();
+        try {
+            await scheduler.stop();
+        } catch (err) {
+            logger.error(t('schedule.stopError', { err }));
+        }
         process.exit(0);
     };
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
+    process.once('SIGINT', () => void shutdown());
+    process.once('SIGTERM', () => void shutdown());
 }
 
 export function createCommand() {
@@ -49,7 +54,7 @@ export function createCommand() {
         command: 'schedule',
         describe: t('schedule.describe'),
         builder(yargs: Argv): Argv<ScheduleOptions> {
-            return yargs
+            return withVLCOptions(yargs)
                 .option('config', {
                     alias: 'c',
                     type: 'string',

@@ -1,12 +1,14 @@
 {
   "demandCommand": "Veuillez spécifier une commande.",
-  "check": {
-    "describe": "Vérifie si VLC est accessible",
+  "vlc": {
     "options": {
       "host": "Hôte VLC RC",
       "port": "Port VLC RC",
       "timeout": "Délai de connexion (ms)"
-    },
+    }
+  },
+  "check": {
+    "describe": "Vérifie si VLC est accessible",
     "reachable": "VLC est accessible (statut : {{status}})",
     "unreachable": "VLC n'est pas accessible : {{err}}"
   },
@@ -15,7 +17,8 @@
     "options": {
       "config": "Chemin vers le fichier JSON de configuration"
     },
-    "stopping": "Arrêt du planificateur..."
+    "stopping": "Arrêt du planificateur...",
+    "stopError": "Impossible d'arrêter VLC : {{err}}"
   },
   "play": {
     "describe": "Arrête et remplace la playlist courante",

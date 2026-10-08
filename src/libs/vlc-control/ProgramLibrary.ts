@@ -29,36 +29,36 @@ export class ProgramLibrary {
         return program;
     }
 
-    /**
-     * Creates a Program from a ProgramDefinition without registering it.
-     * Program-type entries must reference names already registered in this library.
-     */
     entries(): IterableIterator<[string, Program]> {
         return this._programs.entries();
     }
 
+    /**
+     * Creates a Program from a ProgramDefinition without registering it.
+     * Program-type entries must reference names already registered in this library.
+     */
     createFromDefinition(definition: ProgramDefinition): Program {
         const program = new Program({ cron: definition.cron });
         for (const entry of definition.entries) {
             switch (entry.type) {
-                case 'song':
-                    program.addSong(entry.location);
-                    break;
-                case 'folder':
-                    program.addFolder(entry.location, {
-                        shuffle: entry.shuffle,
-                        limit: entry.limit,
-                        recursive: entry.recursive,
-                    });
-                    break;
-                case 'program': {
-                    const ref = this._programs.get(entry.name);
-                    if (ref === undefined) {
-                        throw new Error(`Program "${entry.name}" not found in library`);
-                    }
-                    program.addProgram(ref);
-                    break;
+            case 'song':
+                program.addSong(entry.location);
+                break;
+            case 'folder':
+                program.addFolder(entry.location, {
+                    shuffle: entry.shuffle,
+                    limit: entry.limit,
+                    recursive: entry.recursive,
+                });
+                break;
+            case 'program': {
+                const ref = this._programs.get(entry.name);
+                if (ref === undefined) {
+                    throw new Error(`Program "${entry.name}" not found in library`);
                 }
+                program.addProgram(ref);
+                break;
+            }
             }
         }
         return program;

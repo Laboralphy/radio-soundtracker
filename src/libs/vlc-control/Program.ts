@@ -48,13 +48,15 @@ export class Program {
         program = null,
         shuffle = false,
         limit = Infinity,
+        recursive = false,
     }: AddEntryOptions): void {
         this.entries.push(new ProgramEntry({
             type,
             location,
             program,
             shuffle,
-            limit
+            limit,
+            recursive
         }));
     }
 

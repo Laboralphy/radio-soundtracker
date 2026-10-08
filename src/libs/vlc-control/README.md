@@ -7,10 +7,13 @@ This library controls a running VLC instance via its RC (remote control) telnet 
 ```
 VLCConnection          low-level TCP socket to VLC RC interface
     └── VLCControl     typed command methods (play, stop, enqueue, getTime…)
-            └── ProgramPlayer   program lifecycle + doom loop
+            └── ProgramPlayer   program lifecycle + doom loop (implements Player)
 
 Program                playlist descriptor (ordered list of entries)
     └── ProgramEntry   a single entry: song file, folder, or nested program
+
+ProgramLibrary         named programs, built from the JSON schedule file
+ProgramScheduler       default program loop + cron programs, on top of any Player
 ```
 
 ---
@@ -19,14 +22,13 @@ Program                playlist descriptor (ordered list of entries)
 
 Handles raw TCP communication with VLC's RC interface (`--intf rc` / `--rc-host`).
 
-Each call to `sendTransaction(command)` opens a new TCP socket, sends the command string, waits for VLC to echo back the `> ` prompt (which marks the end of a response), then closes the socket and resolves with the response text.
+`sendBatch(commands: string[])` opens a TCP socket, skips the welcome banner, then sends the commands **one at a time**: each command is written only after VLC has answered the previous one with its `> ` prompt. It resolves with one response per command. `sendTransaction(command)` is the single-command variant.
 
-Multiple commands can be sent in a single connection by joining them with `\n`:
-```ts
-sendTransaction('get_time\nget_length')  // returns two response lines
-```
+Commands must not be sent all at once: VLC prints a prompt each time it waits for input, not after each command, so the responses to commands received in the same read come back without prompts between them and cannot be told apart.
 
-`sendBatch(commands: string[])` is the array variant; it waits until as many `> ` prompts as commands have been received before closing.
+Batches are queued, so two callers never use the RC interface at the same time.
+
+Errors reject the promise: VLC not reachable, connection closed early, or no answer within `timeout` ms (idle time between two pieces of data).
 
 Default connection parameters: `host=localhost`, `port=1234`, `timeout=1000ms`.
 
@@ -57,7 +59,7 @@ Wraps `VLCConnection` and exposes typed methods for every supported VLC RC comma
 | `getPlaylist()` | `playlist` |
 | `getVolume()` | `volume` |
 
-`getTime()` sends `get_time\nget_length` in a single transaction because VLC's RC interface only returns one value per command. It returns:
+`getTime()` sends `get_time` and `get_length` in a single batch because VLC's RC interface only returns one value per command. It returns:
 ```ts
 interface TimeInfo {
     time: number;       // elapsed seconds
@@ -119,19 +121,22 @@ Orchestrates the full playback lifecycle for a `Program`.
 
 Requires an injected `VLCControl` instance (set via constructor option `vlc` or the `vlc` setter).
 
-**`playProgram(program)`** — starts playback and returns a `Promise<void>` that resolves when the playlist ends or rejects on error. Internally it:
-1. Stops VLC and clears the current playlist
-2. Calls `program.renderList()` to resolve all file paths
-3. Enqueues the full list and starts playback
+**`playProgram(program)`** — starts playback and returns a `Promise<void>` that resolves when the playlist ends or is interrupted, and rejects on error. Internally it:
+1. Interrupts the program currently playing, if any (its promise resolves)
+2. Calls `program.renderList()` to resolve all file paths; rejects if the list is empty
+3. Stops VLC, clears the playlist, enqueues the full list and starts playback
 4. Triggers `EVENT_NEW_SONG` for the first track
 5. Starts the doom loop
 
-**Doom loop** — a `setInterval` that ticks every second. It counts down `_remainingTime` (seeded from the current song's remaining duration). When it reaches zero it polls VLC:
-- If still playing → calls `triggerNewSong()` to check whether the track changed
-- If stopped → emits `EVENT_PLAYLIST_END` and stops the loop
-- On error → emits `EVENT_ERROR` and stops the loop
+**Doom loop** — a timer set to fire when the current song should end (at least 1 s, at most 60 s later). When it fires it polls VLC:
+- If still playing → calls `triggerNewSong()` to check whether the track changed, then sets the next timer
+- If not playing twice in a row → emits `EVENT_PLAYLIST_END` and resolves (VLC can report "not playing" for a moment between two songs)
+- On error → retries after 1 s; after 3 failures in a row, emits `EVENT_ERROR` and rejects
 
 This avoids polling VLC every second at steady state; it only polls at song boundaries.
+
+**`stopDoomLoop()`** — interrupts the current program (its promise resolves) without stopping VLC.
+**`stop()`** — same, and also stops VLC.
 
 **`triggerNewSong()`** — fetches the current title from VLC. If the title changed since the last call it emits `EVENT_NEW_SONG`. Either way it updates `_remainingTime` from the current song's remaining duration.
 

@@ -1,5 +1,6 @@
 import winston from 'winston';
 import 'winston-daily-rotate-file';
+import { config } from '../config/index.js';
 
 const consoleTransport = new winston.transports.Console({
     level: 'info',
@@ -14,7 +15,7 @@ const consoleTransport = new winston.transports.Console({
 
 const fileTransport = new winston.transports.DailyRotateFile({
     level: 'debug',
-    dirname: 'logs',
+    dirname: config.logDir,
     filename: 'radio-%DATE%.log',
     datePattern: 'YYYY-MM-DD',
     maxFiles: '14d',

@@ -9,3 +9,5 @@ node_modules/
 
 # Log file locations
 logs/
+# Build output
+dist/

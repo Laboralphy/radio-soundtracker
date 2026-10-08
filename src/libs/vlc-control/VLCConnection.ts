@@ -6,15 +6,32 @@ export interface VLCConnectionOptions {
     timeout?: number;
 }
 
-interface ParseAccumulator {
-    current: string[] | null;
-    heap: string[][] | null;
+const PROMPT = '> ';
+
+/**
+ * Extracts a complete response from the data received since the last prompt.
+ * VLC prints a prompt ("> ", no newline) each time it waits for input,
+ * so a response is complete when the buffer ends with a prompt.
+ * Returns null while the buffer does not end with a prompt yet.
+ */
+export function extractResponse(sBuffer: string): string | null {
+    const s = sBuffer.replace(/\r/g, '');
+    if (!s.endsWith(PROMPT)) {
+        return null;
+    }
+    const sBody = s.slice(0, -PROMPT.length);
+    if (sBody !== '' && !sBody.endsWith('\n')) {
+        // "> " appears in the middle of a line: not a prompt
+        return null;
+    }
+    return sBody.replace(/\n$/, '');
 }
 
 export class VLCConnection {
     private _host: string;
     private _port: number;
     private _timeout: number;
+    private _queue: Promise<unknown> = Promise.resolve();
 
     constructor({
         host = 'localhost',
@@ -27,138 +44,83 @@ export class VLCConnection {
     }
 
     /**
-     * Sends a transaction to VLC
-     * 1) Sends input command
-     * 2) Collect responses
-     * 3) Close connection when time out
+     * Sends a single command to VLC and resolves with its response.
      */
-    sendTransaction(sMessage: string): Promise<string> {
+    async sendTransaction(sCommand: string): Promise<string> {
+        const [sResponse] = await this.sendBatch([sCommand]);
+        return sResponse;
+    }
+
+    /**
+     * Sends several commands over one TCP connection and resolves with one response per command.
+     * Commands are sent one at a time: the next one is only written once VLC has answered
+     * the previous one with a prompt. Batches are serialized, so two callers never share
+     * the RC interface at the same time.
+     * Rejects if VLC does not answer within the timeout.
+     */
+    sendBatch(aCommands: string[]): Promise<string[]> {
+        const p = this._queue.then(() => this.runBatch(aCommands));
+        this._queue = p.catch(() => undefined);
+        return p;
+    }
+
+    private runBatch(aCommands: string[]): Promise<string[]> {
         return new Promise((resolve, reject) => {
             const client = new net.Socket();
-            const outputBuffer: string[] = [];
-            client.setTimeout(this._timeout);
-            client.once('timeout', () => {
-                client.end();
-            });
-            client.connect(this._port, this._host, () => {
-                return this.write(client, sMessage + '\n');
-            });
-            client.on('data', (data: Buffer) => {
-                const sData = data.toString().replace(/\r/g, '');
-                outputBuffer.push(sData);
-                const response = outputBuffer
-                    .join('')
-                    .split('\n')
-                    .map(s => s.trim())
-                    .filter(s => s !== '');
-                if (this.parseResponse(response).length >= 1) {
-                    client.end();
+            const aResponses: string[] = [];
+            let sBuffer = '';
+            let bBannerSkipped = false;
+            let bDone = false;
+
+            const finish = (err: Error | null) => {
+                if (bDone) {
+                    return;
                 }
-            });
-            client.on('close', () => {
-                const response = outputBuffer
-                    .join('')
-                    .split('\n')
-                    .map(s => s.trim())
-                    .filter(s => s !== '');
-                resolve(this.parseResponse(response).map(s => s.join('\n')).at(0) ?? '');
-            });
-            client.on('error', (err: Error) => {
-                reject(err);
-            });
-        });
-    }
-
-    /**
-     * Sends multiple commands in a single TCP connection and returns all responses
-     */
-    sendBatch(commands: string[]): Promise<string[]> {
-        return new Promise((resolve, reject) => {
-            const client = new net.Socket();
-            const outputBuffer: string[] = [];
-            client.setTimeout(this._timeout);
-            client.once('timeout', () => {
-                client.end();
-            });
-            client.connect(this._port, this._host, () => {
-                return this.write(client, commands.join('\n') + '\n');
-            });
-            client.on('data', (data: Buffer) => {
-                const sData = data.toString().replace(/\r/g, '');
-                outputBuffer.push(sData);
-                const response = outputBuffer
-                    .join('')
-                    .split('\n')
-                    .map(s => s.trim())
-                    .filter(s => s !== '');
-                if (this.parseResponse(response).length >= commands.length) {
-                    client.end();
-                }
-            });
-            client.on('close', () => {
-                const response = outputBuffer
-                    .join('')
-                    .split('\n')
-                    .map(s => s.trim())
-                    .filter(s => s !== '');
-                resolve(this.parseResponse(response).map(s => s.join('\n')));
-            });
-            client.on('error', (err: Error) => {
-                reject(err);
-            });
-        });
-    }
-
-    /**
-     * Write something on vlc rc socket
-     */
-    private write(client: net.Socket, sMessage: string): Promise<void> {
-        return new Promise((resolve, reject) => {
-            if (!client) {
-                reject(new Error('Client socket not created'));
-                return;
-            }
-            if (client.destroyed) {
-                reject(new Error('Client not connected (destroyed = true)'));
-                return;
-            }
-            if (client.write(sMessage)) {
-                resolve();
-            } else {
-                client.once('drain', () => {
-                    resolve();
-                });
-            }
-            client.once('error', (err: Error) => {
-                reject(new Error(`Error during send: ${err.message}`));
-            });
-        });
-    }
-
-    /**
-     * Extract useful data from response
-     */
-    private parseResponse(aResponse: string[]): string[][] {
-        const data = aResponse.reduce<ParseAccumulator>((prev, curr) => {
-            if (curr.startsWith('> ')) {
-                if (Array.isArray(prev.heap)) {
-                    prev.heap.push(prev.current!);
+                bDone = true;
+                client.destroy();
+                if (err) {
+                    reject(err);
                 } else {
-                    prev.heap = [];
+                    resolve(aResponses);
                 }
-                prev.current = [curr.substring(2)];
-            } else if (Array.isArray(prev.current)) {
-                prev.current.push(curr);
-            }
-            return prev;
-        }, { current: null, heap: null });
-        if (data.heap === null) {
-            return [];
-        }
-        const nLength = data.current?.length ?? 0;
-        if (nLength > 0) {
-            data.heap.push(data.current!);
-        }
-        return data.heap;
+            };
+
+            const sendNext = () => {
+                const sCommand = aCommands[aResponses.length];
+                if (sCommand === undefined) {
+                    finish(null);
+                } else {
+                    client.write(sCommand + '\n');
+                }
+            };
+
+            client.setTimeout(this._timeout);
+            client.on('timeout', () => {
+                const sPending = aCommands[aResponses.length] ?? '(connection)';
+                finish(new Error(`VLC RC timeout after ${this._timeout}ms waiting for "${sPending}"`));
+            });
+            client.on('error', (err: NodeJS.ErrnoException) => {
+                finish(new Error(`VLC RC error at ${this._host}:${this._port}: ${err.code ?? err.message}`, { cause: err }));
+            });
+            client.on('close', () => {
+                finish(new Error('VLC RC connection closed before all responses were received'));
+            });
+            client.on('data', (data: Buffer) => {
+                sBuffer += data.toString();
+                const sResponse = extractResponse(sBuffer);
+                if (sResponse === null) {
+                    return;
+                }
+                sBuffer = '';
+                if (bBannerSkipped) {
+                    aResponses.push(sResponse);
+                } else {
+                    // the first prompt follows the welcome banner
+                    bBannerSkipped = true;
+                }
+                sendNext();
+            });
+            client.connect(this._port, this._host);
+        });
     }
 }

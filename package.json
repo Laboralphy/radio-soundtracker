@@ -2,15 +2,17 @@
   "name": "radio-soundtracker",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.js",
+  "main": "dist/index.js",
   "directories": {
     "doc": "doc"
   },
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc",
+    "build": "tsc && node -e \"require('fs').cpSync('src/locales', 'dist/locales', { recursive: true })\"",
+    "start": "node dist/index.js",
     "test": "vitest",
-    "lint": "eslint src",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "lint": "eslint src __tests__",
     "vlcctl:start": "./bin/vlcctl",
     "vlcctl:stop": "./bin/vlcctl -q && echo \"VLC was running\" || echo \"VLC was not running\""
   },

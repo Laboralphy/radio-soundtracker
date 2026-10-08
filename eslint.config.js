@@ -1,10 +1,14 @@
 // eslint.config.js
-module.exports = [
+import tseslint from 'typescript-eslint';
+
+export default [
     {
         ignores: ['node_modules/', 'dist/'], // Exclure les dossiers inutiles
     },
     {
+        files: ['**/*.ts'],
         languageOptions: {
+            parser: tseslint.parser, // Analyser le TypeScript
             ecmaVersion: 'latest', // Active ES2023+
             sourceType: 'module',  // Utiliser les imports ESModules
         },

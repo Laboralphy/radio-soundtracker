@@ -1,0 +1,22 @@
+{
+  "programs": {
+    "jingles": {
+      "entries": [
+        { "type": "song", "location": "/music/jingles/station-id.mod" }
+      ]
+    },
+    "main": {
+      "entries": [
+        { "type": "program", "name": "jingles" },
+        { "type": "folder", "location": "/music/mods", "shuffle": true, "limit": 20, "recursive": true }
+      ]
+    },
+    "night-chiptune": {
+      "cron": "0 22 * * *",
+      "entries": [
+        { "type": "program", "name": "jingles" },
+        { "type": "folder", "location": "/music/chiptunes", "shuffle": true, "limit": 15 }
+      ]
+    }
+  }
+}

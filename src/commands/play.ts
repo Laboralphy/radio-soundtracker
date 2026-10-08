@@ -6,8 +6,9 @@ import { EVENTS } from '../libs/vlc-control/consts.js';
 import { logger } from '../libs/logger/index.js';
 import { t } from '../libs/i18n/index.js';
 import { parseTime } from '../libs/time-parser/index.js';
+import { withVLCOptions, type VLCOptions } from './vlc-options.js';
 
-interface PlayOptions {
+interface PlayOptions extends VLCOptions {
     location: string;
     recursive: boolean;
     shuffle: boolean;
@@ -16,7 +17,7 @@ interface PlayOptions {
 }
 
 async function handler(argv: ArgumentsCamelCase<PlayOptions>): Promise<void> {
-    const vlc = new VLCControl();
+    const vlc = new VLCControl({ host: argv.host, port: argv.port, timeout: argv.timeout });
     const plc = new ProgramPlayer({ vlc });
 
     plc.events.on(EVENTS.EVENT_NEW_SONG, ({ title, remainingTime }: { title: string; remainingTime: number; file: string }) => {
@@ -38,7 +39,7 @@ async function handler(argv: ArgumentsCamelCase<PlayOptions>): Promise<void> {
         const seconds = parseTime(argv.time);
         timeLimitId = setTimeout(() => {
             logger.info(t('play.timeLimitReached', { time: argv.time }));
-            plc.stopDoomLoop();
+            plc.stop().catch(err => logger.error(t('schedule.stopError', { err })));
         }, seconds * 1000);
     }
 
@@ -57,7 +58,7 @@ export function createCommand() {
         command: 'play',
         describe: t('play.describe'),
         builder(yargs: Argv): Argv<PlayOptions> {
-            return yargs
+            return withVLCOptions(yargs)
                 .option('location', { alias: 'l', type: 'string', demandOption: true, describe: t('play.options.location') })
                 .option('recursive', { alias: 'r', type: 'boolean', default: false, describe: t('play.options.recursive') })
                 .option('shuffle',   { alias: 's', type: 'boolean', default: false, describe: t('play.options.shuffle') })
