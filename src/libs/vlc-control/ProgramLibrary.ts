@@ -5,6 +5,7 @@ export class ProgramLibrary {
     private _programs: Map<string, Program> = new Map();
 
     add(name: string, program: Program): void {
+        program.name ||= name;
         this._programs.set(name, program);
     }
 
@@ -25,6 +26,7 @@ export class ProgramLibrary {
      */
     define(name: string, definition: ProgramDefinition): Program {
         const program = this.createFromDefinition(definition);
+        program.name = name;
         this._programs.set(name, program);
         return program;
     }

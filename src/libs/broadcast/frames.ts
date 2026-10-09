@@ -2,8 +2,10 @@
  * The "image program" of the broadcast.
  *
  * Writes raw RGBA frames to stdout, paced to real time, forever.
- * Reads song changes from stdin, one JSON object per line:
- *   {"title": "...", "file": "/path/song.mod", "duration": 123}
+ * Reads what to show from stdin, one JSON object per line:
+ *   {"type": "song", "title": "...", "file": "/path/song.mod", "elapsed": 1, "duration": 123, "next": "/path/other.xm", "program": "main"}
+ *   {"type": "standby", "reason": "idle" | "trouble", "next": {"program": "night", "at": "2026-10-09T20:00:00.000Z"} | null}
+ * For a song only "file" or "title" is needed; "next" may be null. A line without "type" is a song.
  *
  * Usage: node [--import tsx] frames.(ts|js) [width] [height] [fps]
  */
@@ -16,23 +18,70 @@ const HEIGHT = Number(process.argv[3] ?? 480);
 const FPS = Number(process.argv[4] ?? 30);
 const FONT = 'DejaVu Sans Mono, monospace';
 
+interface SongMessage {
+    type: 'song';
+    title: string;
+    file: string;
+    elapsed: number;
+    duration: number;
+    next: string | null;
+    program: string;
+}
+
 interface Song {
     title: string;
     file: string;
     duration: number;
+    next: string;
+    program: string;
+    /**
+     * When the song started, for the progress bar.
+     */
     startedAt: number;
+    /**
+     * When the message arrived, for the title animation.
+     */
+    changedAt: number;
 }
 
-let song: Song = { title: 'Radio Soundtracker', file: '', duration: 0, startedAt: Date.now() };
+interface StandbyMessage {
+    type: 'standby';
+    reason: 'idle' | 'trouble';
+    next: { program: string; at: string } | null;
+}
+
+let song: Song = { title: 'Radio Soundtracker', file: '', duration: 0, next: '', program: '', startedAt: Date.now(), changedAt: Date.now() };
+
+/**
+ * Shown instead of the song while nothing plays.
+ */
+let standby: StandbyMessage | null = null;
+
+/**
+ * "/music/mods/Space Debris.mod" → "Space Debris"
+ */
+function songName(file: string): string {
+    return path.basename(file, path.extname(file));
+}
 
 readline.createInterface({ input: process.stdin }).on('line', line => {
     try {
-        const data = JSON.parse(line) as Partial<Song>;
+        const message = JSON.parse(line) as Partial<SongMessage> | StandbyMessage;
+        if (message.type === 'standby') {
+            standby = message;
+            return;
+        }
+        const data = message;
+        const now = Date.now();
+        standby = null;
         song = {
-            title: data.title || path.basename(data.file ?? '') || 'Unknown',
+            title: data.title || songName(data.file ?? '') || 'Unknown',
             file: data.file ?? '',
             duration: data.duration ?? 0,
-            startedAt: Date.now(),
+            next: data.next ? songName(data.next) : '',
+            program: data.program ?? '',
+            startedAt: now - (data.elapsed ?? 0) * 1000,
+            changedAt: now,
         };
     } catch {
         process.stderr.write(`frames: ignored bad line: ${line}\n`);
@@ -47,6 +96,18 @@ const COPPER_COLORS = ['#ff0044', '#ff8800', '#ffee00', '#00dd66', '#00aaff', '#
 function formatTime(seconds: number): string {
     const s = Math.max(0, Math.floor(seconds));
     return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/**
+ * "Sat 22:00 CEST", or "22:00 CEST" for today, in the server's time zone.
+ */
+function formatStart(iso: string): string {
+    const at = new Date(iso);
+    const time = at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' });
+    if (at.toDateString() === new Date().toDateString()) {
+        return time;
+    }
+    return `${at.toLocaleDateString('en-GB', { weekday: 'short' })} ${time}`;
 }
 
 function drawFrame(t: number): void {
@@ -73,14 +134,48 @@ function drawFrame(t: number): void {
     ctx.font = `bold 22px ${FONT}`;
     ctx.textBaseline = 'top';
     ctx.fillText('RADIO SOUNDTRACKER', 24, 20);
+    if (song.program && !standby) {
+        ctx.fillStyle = '#aaaaff';
+        ctx.font = `16px ${FONT}`;
+        const label = song.program.toUpperCase();
+        ctx.fillText(label, WIDTH - 24 - ctx.measureText(label).width, 25);
+    }
 
     // now playing panel
-    const panelY = HEIGHT - 150;
+    const panelHeight = 176;
+    const panelY = HEIGHT - panelHeight;
     ctx.fillStyle = 'rgba(0, 0, 40, 0.85)';
-    ctx.fillRect(0, panelY, WIDTH, 150);
+    ctx.fillRect(0, panelY, WIDTH, panelHeight);
     ctx.fillStyle = '#5555aa';
     ctx.fillRect(0, panelY, WIDTH, 2);
 
+    if (standby) {
+        drawStandby(standby, panelY, t);
+    } else {
+        drawSong(panelY);
+    }
+}
+
+function drawStandby(message: StandbyMessage, panelY: number, t: number): void {
+    const trouble = message.reason === 'trouble';
+    ctx.fillStyle = '#aaaaff';
+    ctx.font = `16px ${FONT}`;
+    ctx.fillText(trouble ? 'TECHNICAL DIFFICULTIES' : 'OFF AIR', 24, panelY + 16);
+
+    // the headline pulses gently, so the picture shows the stream is alive
+    ctx.font = `bold 36px ${FONT}`;
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.7 + 0.3 * Math.sin(t * 2)})`;
+    ctx.fillText(trouble ? 'Back in a moment' : 'Back soon', 24, panelY + 42);
+
+    ctx.font = `16px ${FONT}`;
+    ctx.fillStyle = '#8888cc';
+    ctx.fillText('Stay tuned for more tracker music', 24, panelY + 90);
+    if (message.next) {
+        ctx.fillText(`NEXT: ${message.next.program.toUpperCase()} at ${formatStart(message.next.at)}`, 24, panelY + 144);
+    }
+}
+
+function drawSong(panelY: number): void {
     ctx.fillStyle = '#aaaaff';
     ctx.font = `16px ${FONT}`;
     ctx.fillText('NOW PLAYING', 24, panelY + 16);
@@ -88,7 +183,7 @@ function drawFrame(t: number): void {
     // title: scrolls when too wide, otherwise slides in after a song change
     ctx.font = `bold 36px ${FONT}`;
     ctx.fillStyle = '#ffffff';
-    const sinceChange = (Date.now() - song.startedAt) / 1000;
+    const sinceChange = (Date.now() - song.changedAt) / 1000;
     const titleWidth = ctx.measureText(song.title).width;
     let x = 24;
     if (titleWidth > WIDTH - 48) {
@@ -105,14 +200,20 @@ function drawFrame(t: number): void {
     ctx.fillStyle = '#8888cc';
     ctx.fillText(path.basename(song.file), 24, panelY + 90);
     if (song.duration > 0) {
-        const ratio = Math.min(sinceChange / song.duration, 1);
+        const elapsed = Math.min((Date.now() - song.startedAt) / 1000, song.duration);
+        const ratio = elapsed / song.duration;
         ctx.fillStyle = '#333366';
         ctx.fillRect(24, panelY + 120, WIDTH - 48, 8);
         ctx.fillStyle = '#ffee00';
         ctx.fillRect(24, panelY + 120, (WIDTH - 48) * ratio, 8);
         ctx.fillStyle = '#aaaaff';
-        const label = `${formatTime(sinceChange)} / ${formatTime(song.duration)}`;
+        const label = `${formatTime(elapsed)} / ${formatTime(song.duration)}`;
         ctx.fillText(label, WIDTH - 24 - ctx.measureText(label).width, panelY + 90);
+    }
+
+    if (song.next) {
+        ctx.fillStyle = '#8888cc';
+        ctx.fillText(`NEXT: ${song.next}`, 24, panelY + 144);
     }
 }
 

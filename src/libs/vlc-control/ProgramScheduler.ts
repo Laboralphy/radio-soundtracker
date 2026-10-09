@@ -17,7 +17,7 @@ export class ProgramScheduler {
     private readonly _library: ProgramLibrary;
     private readonly _player: Player;
     private readonly _retryDelays: number[];
-    private _tasks: cron.ScheduledTask[] = [];
+    private _tasks: { name: string; task: cron.ScheduledTask }[] = [];
     private _stopped = false;
     private _playingScheduled = false;
     private _defaultProgram: Program | null = null;
@@ -43,7 +43,7 @@ export class ProgramScheduler {
             const task = cron.schedule(program.cron, () => {
                 void this.playScheduled(name);
             });
-            this._tasks.push(task);
+            this._tasks.push({ name, task });
             logger.info(`Scheduled program "${name}" with cron "${program.cron}"`);
         }
 
@@ -62,9 +62,23 @@ export class ProgramScheduler {
         this._stopped = true;
         ++this._defaultLoopId;
         this._wakeUp?.();
-        for (const task of this._tasks) task.stop();
+        for (const { task } of this._tasks) task.stop();
         this._tasks = [];
         await this._player.stop();
+    }
+
+    /**
+     * The scheduled program that starts next, or null if there is none.
+     */
+    nextScheduled(): { name: string; at: Date } | null {
+        let next: { name: string; at: Date } | null = null;
+        for (const { name, task } of this._tasks) {
+            const at = task.getNextRun();
+            if (at !== null && (next === null || at < next.at)) {
+                next = { name, at };
+            }
+        }
+        return next;
     }
 
     /**

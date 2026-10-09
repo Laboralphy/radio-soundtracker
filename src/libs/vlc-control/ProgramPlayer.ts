@@ -6,10 +6,29 @@ import type { Program } from './Program.js';
 import type { Player } from './Player.js';
 import { logger } from '../logger/index.js';
 
-interface NewSongEvent {
+export interface NewSongEvent {
     title: string;
-    remainingTime: number;
     file: string;
+    /**
+     * Seconds left in the song when the event was emitted.
+     */
+    remainingTime: number;
+    /**
+     * Seconds already played when the event was emitted.
+     */
+    elapsed: number;
+    /**
+     * Length of the song in seconds.
+     */
+    duration: number;
+    /**
+     * File of the song that follows in the program, or null for the last one.
+     */
+    next: string | null;
+    /**
+     * Name of the program being played, '' if it has none.
+     */
+    program: string;
 }
 
 interface ProgramPlayerOptions {
@@ -29,7 +48,8 @@ const MAX_CONSECUTIVE_ERRORS = 3;
 
 /**
  * Number of consecutive "not playing" polls needed to consider the playlist finished.
- * VLC can briefly report "not playing" while switching to the next song.
+ * VLC can briefly report "not playing" while switching to the next song; after the last song
+ * there is no next song, so one poll is enough there.
  */
 const NOT_PLAYING_CONFIRMATIONS = 2;
 
@@ -39,12 +59,21 @@ const NOT_PLAYING_CONFIRMATIONS = 2;
  */
 const MAX_POLL_INTERVAL = 60;
 
+/**
+ * Wait between two polls, in seconds, around the end of the last song of a program,
+ * so the next program starts with as little silence as possible.
+ */
+const END_POLL_INTERVAL = 0.25;
+
 export class ProgramPlayer implements Player {
     private _vlcctl: VLCControl | null = null;
     private _remainingTime: number;
     private _doomLoopTimerId: ReturnType<typeof setTimeout> | null;
     private _events: EventEmitter;
-    private _lastTitle: string;
+    private _lastSong: string;
+    private _playlist: string[] = [];
+    private _position = -1;
+    private _programName = '';
     private _run: Run | null = null;
     private _runCount = 0;
     private _consecutiveErrors = 0;
@@ -57,7 +86,7 @@ export class ProgramPlayer implements Player {
         this._remainingTime = 0;
         this._doomLoopTimerId = null;
         this._events = new Events();
-        this._lastTitle = '';
+        this._lastSong = '';
     }
 
     get vlc(): VLCControl {
@@ -97,7 +126,7 @@ export class ProgramPlayer implements Player {
     }
 
     async triggerNewSong(): Promise<void> {
-        const { remaining } = await this.vlc.getTime();
+        const { time, total, remaining } = await this.vlc.getTime();
         logger.debug(`triggerNewSong: remaining=${remaining}`);
         if (Number.isNaN(remaining)) {
             this._remainingTime = 0;
@@ -105,16 +134,35 @@ export class ProgramPlayer implements Player {
         }
         const sTitle = await this.vlc.getTitle();
         const sFileName = await this.getSongFile();
-        logger.debug(`triggerNewSong: title="${sTitle}" lastTitle="${this._lastTitle}" file="${sFileName}"`);
+        logger.debug(`triggerNewSong: title="${sTitle}" file="${sFileName}"`);
         this._remainingTime = remaining;
-        if (this._lastTitle !== sTitle) {
-            this._lastTitle = sTitle;
+        // songs in a row may share a title (often empty in modules): the file tells them apart
+        const sSong = sFileName + '\0' + sTitle;
+        if (this._lastSong !== sSong) {
+            this._lastSong = sSong;
             this._events.emit(EVENTS.EVENT_NEW_SONG, {
                 title: sTitle,
+                file: sFileName,
                 remainingTime: remaining,
-                file: sFileName
+                elapsed: time,
+                duration: total,
+                next: this.findNext(sFileName),
+                program: this._programName,
             } satisfies NewSongEvent);
         }
+    }
+
+    /**
+     * Finds the song after the given one in the playlist sent to VLC.
+     * Searches forward from the previous song first, as a file may appear more than once.
+     */
+    private findNext(sFile: string): string | null {
+        let index = this._playlist.indexOf(sFile, this._position + 1);
+        if (index < 0) {
+            index = this._playlist.indexOf(sFile);
+        }
+        this._position = index;
+        return index >= 0 ? this._playlist[index + 1] ?? null : null;
     }
 
     private isCurrentRun(id: number): boolean {
@@ -149,12 +197,26 @@ export class ProgramPlayer implements Player {
         }
     }
 
+    private isLastSong(): boolean {
+        return this._position >= 0 && this._position === this._playlist.length - 1;
+    }
+
     /**
-     * Schedules the next poll at the end of the current song.
+     * Seconds until the next poll: at the end of the current song, or, for the last song of the
+     * program, shortly before its end and then often.
      */
-    private scheduleDoomLoop(id: number): void {
+    private nextPollDelay(): number {
+        if (this.isLastSong()) {
+            return Math.min(Math.max(this._remainingTime - 1, END_POLL_INTERVAL), MAX_POLL_INTERVAL);
+        }
+        return Math.min(Math.max(this._remainingTime, 1), MAX_POLL_INTERVAL);
+    }
+
+    /**
+     * Schedules the next poll, by default at the end of the current song.
+     */
+    private scheduleDoomLoop(id: number, nDelay: number = this.nextPollDelay()): void {
         this.clearTimer();
-        const nDelay = Math.min(Math.max(this._remainingTime, 1), MAX_POLL_INTERVAL);
         this._doomLoopTimerId = setTimeout(() => void this.doomLoop(id), nDelay * 1000);
     }
 
@@ -171,8 +233,11 @@ export class ProgramPlayer implements Player {
             this._consecutiveErrors = 0;
             if (bPlaying) {
                 this._notPlayingCount = 0;
-                await this.triggerNewSong();
-            } else if (++this._notPlayingCount >= NOT_PLAYING_CONFIRMATIONS) {
+                // in the last second of the program nothing can change: only wait for the end, with cheap polls
+                if (!(this.isLastSong() && this._remainingTime <= 1)) {
+                    await this.triggerNewSong();
+                }
+            } else if (++this._notPlayingCount >= NOT_PLAYING_CONFIRMATIONS || this.isLastSong()) {
                 this.finishRun(id);
                 return;
             } else {
@@ -184,7 +249,10 @@ export class ProgramPlayer implements Player {
                 return;
             }
             logger.warn(`VLC poll failed (${this._consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}): ${err}`);
-            this._remainingTime = 1;
+            if (this.isCurrentRun(id)) {
+                this.scheduleDoomLoop(id, 1);
+            }
+            return;
         }
         if (this.isCurrentRun(id)) {
             this.scheduleDoomLoop(id);
@@ -221,7 +289,10 @@ export class ProgramPlayer implements Player {
         if (!this.isCurrentRun(id)) {
             return;
         }
-        this._lastTitle = '';
+        this._lastSong = '';
+        this._playlist = aList;
+        this._position = -1;
+        this._programName = oProgram.name;
         this._consecutiveErrors = 0;
         this._notPlayingCount = 0;
         await this.triggerNewSong();

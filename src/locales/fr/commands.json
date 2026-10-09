@@ -48,6 +48,7 @@
     "stopping": "Arrêt de la diffusion...",
     "stopError": "Impossible d'arrêter proprement la diffusion : {{err}}",
     "startError": "Impossible de démarrer la diffusion : {{err}}",
-    "fatal": "La diffusion a échoué : {{reason}}"
+    "fatal": "La diffusion a échoué : {{reason}}",
+    "standby": "Rien ne joue, écran d'attente affiché ({{reason}})"
   }
 }

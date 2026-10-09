@@ -1,11 +1,12 @@
 import path from 'node:path';
 import type { Argv, ArgumentsCamelCase } from 'yargs';
 import { VLCControl } from '../libs/vlc-control/VLCControl.js';
-import { ProgramPlayer } from '../libs/vlc-control/ProgramPlayer.js';
+import { ProgramPlayer, type NewSongEvent } from '../libs/vlc-control/ProgramPlayer.js';
 import { ProgramScheduler } from '../libs/vlc-control/ProgramScheduler.js';
 import { EVENTS } from '../libs/vlc-control/consts.js';
 import { Broadcast, BROADCAST_EVENTS } from '../libs/broadcast/Broadcast.js';
 import { parseSize } from '../libs/broadcast/encoder.js';
+import { StandbyMonitor } from '../libs/broadcast/StandbyMonitor.js';
 import { config } from '../libs/config/index.js';
 import { logger } from '../libs/logger/index.js';
 import { t } from '../libs/i18n/index.js';
@@ -45,6 +46,17 @@ async function handler(argv: ArgumentsCamelCase<BroadcastCommandOptions>): Promi
     });
     const player = new ProgramPlayer({ vlc });
     const scheduler = new ProgramScheduler(library, player);
+    const standby = new StandbyMonitor({
+        events: player.events,
+        nextScheduled: () => scheduler.nextScheduled(),
+        onSong: ({ title, file, elapsed, duration, next, program }) => {
+            broadcast.setSong({ title, file, elapsed, duration, next, program });
+        },
+        onStandby: info => {
+            logger.info(t('broadcast.standby', { reason: info.reason }));
+            broadcast.setStandby(info);
+        },
+    });
     let started = false;
 
     let stopping = false;
@@ -54,6 +66,7 @@ async function handler(argv: ArgumentsCamelCase<BroadcastCommandOptions>): Promi
         }
         stopping = true;
         logger.info(t('broadcast.stopping'));
+        standby.stop();
         if (started) {
             try {
                 await scheduler.stop();
@@ -69,9 +82,8 @@ async function handler(argv: ArgumentsCamelCase<BroadcastCommandOptions>): Promi
         logger.error(t('broadcast.fatal', { reason }));
         void shutdown(1);
     });
-    player.events.on(EVENTS.EVENT_NEW_SONG, ({ title, remainingTime, file }: { title: string; remainingTime: number; file: string }) => {
+    player.events.on(EVENTS.EVENT_NEW_SONG, ({ title, remainingTime }: NewSongEvent) => {
         logger.info(t('play.newSong', { title, duration: remainingTime }));
-        broadcast.setSong({ title, file, duration: remainingTime });
     });
     player.events.on(EVENTS.EVENT_ERROR, (err: unknown) => {
         logger.error(`Playback error: ${err}`);
@@ -88,6 +100,7 @@ async function handler(argv: ArgumentsCamelCase<BroadcastCommandOptions>): Promi
     }
     if (!stopping) {
         started = true;
+        standby.start();
         scheduler.start();
     }
 }

@@ -48,6 +48,7 @@
     "stopping": "Stopping broadcast...",
     "stopError": "Could not stop the broadcast cleanly: {{err}}",
     "startError": "Could not start the broadcast: {{err}}",
-    "fatal": "Broadcast failed: {{reason}}"
+    "fatal": "Broadcast failed: {{reason}}",
+    "standby": "Nothing playing, standby screen on ({{reason}})"
   }
 }

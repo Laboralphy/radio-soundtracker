@@ -134,6 +134,19 @@ describe('ProgramScheduler', () => {
         expect(player.played).toEqual([main, night, main]);
     });
 
+    it('tells which scheduled program comes next', async () => {
+        current = setup();
+        const { library, scheduler } = current;
+        library.add('hourly', new Program({ cron: '0 * * * *' }));
+        expect(scheduler.nextScheduled()).toBeNull();
+        scheduler.start();
+        const next = scheduler.nextScheduled();
+        expect(next?.name).toBe('hourly');
+        expect(next!.at.getTime() - Date.now()).toBeLessThanOrEqual(3600 * 1000);
+        await scheduler.stop();
+        expect(scheduler.nextScheduled()).toBeNull();
+    });
+
     it('stops the player and plays nothing more once stopped', async () => {
         current = setup();
         const { player, scheduler } = current;

@@ -16,6 +16,8 @@ export async function initI18n(): Promise<TFunction> {
         fallbackLng: 'en',
         ns: ['commands'],
         defaultNS: 'commands',
+        // messages go to a terminal and log files, not HTML: keep titles such as "'infinity' - necros/khyron" as is
+        interpolation: { escapeValue: false },
         backend: {
             loadPath: path.join(__dirname, '../../locales/{{lng}}/{{ns}}.json')
         }

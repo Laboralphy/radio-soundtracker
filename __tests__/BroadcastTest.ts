@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildEncoderArgs, parseSize, redactOutput } from '../src/libs/broadcast/encoder.js';
+import { buildEncoderArgs, parseSize, redactOutput, scaleBitrate } from '../src/libs/broadcast/encoder.js';
 import { NullSink } from '../src/libs/broadcast/NullSink.js';
 import { parseConfig } from '../src/libs/config/index.js';
 
@@ -42,14 +42,39 @@ describe('buildEncoderArgs', () => {
         expect(valueOf(args, '-pix_fmt', 0)).toBe('rgba');
     });
 
-    it('puts a keyframe every 2 seconds', () => {
+    it('puts a keyframe every 2 seconds, and only then', () => {
         expect(valueOf(args, '-g')).toBe('60');
+        expect(valueOf(args, '-keyint_min')).toBe('60');
+        expect(valueOf(args, '-sc_threshold')).toBe('0');
+    });
+
+    it('caps the video bitrate', () => {
+        expect(valueOf(args, '-maxrate')).toBe('1500k');
+        expect(valueOf(args, '-bufsize')).toBe('3000k');
     });
 
     it('uses the bitrates and ends with the FLV output', () => {
         expect(valueOf(args, '-b:v')).toBe('1500k');
         expect(valueOf(args, '-b:a')).toBe('160k');
         expect(args.slice(-3)).toEqual(['-f', 'flv', 'out.flv']);
+    });
+
+    it('does not try to rewrite the header of a live stream', () => {
+        expect(args).not.toContain('-flvflags');
+        const live = buildEncoderArgs({ ...SETTINGS, output: 'rtmps://a.rtmp.youtube.com/live2/key' });
+        expect(valueOf(live, '-flvflags')).toBe('no_duration_filesize');
+    });
+});
+
+describe('scaleBitrate', () => {
+    it('keeps the unit', () => {
+        expect(scaleBitrate('1500k', 2)).toBe('3000k');
+        expect(scaleBitrate('2M', 2)).toBe('4M');
+        expect(scaleBitrate('800000', 2)).toBe('1600000');
+    });
+
+    it('rejects anything else', () => {
+        expect(() => scaleBitrate('1.5M', 2)).toThrow();
     });
 });
 

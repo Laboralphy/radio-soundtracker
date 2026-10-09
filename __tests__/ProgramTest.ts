@@ -99,6 +99,7 @@ describe('ProgramLibrary', () => {
         expect(await library.get('main')!.renderList()).toHaveLength(6);
         expect(await library.get('night')!.renderList()).toHaveLength(1);
         expect(library.get('night')!.cron).toBe('0 22 * * *');
+        expect(library.get('night')!.name).toBe('night');
     });
 
     it('rejects a reference to a program defined later', () => {

@@ -131,6 +131,7 @@ Requires an injected `VLCControl` instance (set via constructor option `vlc` or 
 **Doom loop** — a timer set to fire when the current song should end (at least 1 s, at most 60 s later). When it fires it polls VLC:
 - If still playing → calls `triggerNewSong()` to check whether the track changed, then sets the next timer
 - If not playing twice in a row → emits `EVENT_PLAYLIST_END` and resolves (VLC can report "not playing" for a moment between two songs)
+- Around the end of the **last** song of the program it polls every 0.25 s, only asking VLC whether it still plays, and a single "not playing" ends the program. The next program then starts after about 0.3 s of silence instead of 1–2 s.
 - On error → retries after 1 s; after 3 failures in a row, emits `EVENT_ERROR` and rejects
 
 This avoids polling VLC every second at steady state; it only polls at song boundaries.
@@ -138,13 +139,13 @@ This avoids polling VLC every second at steady state; it only polls at song boun
 **`stopDoomLoop()`** — interrupts the current program (its promise resolves) without stopping VLC.
 **`stop()`** — same, and also stops VLC.
 
-**`triggerNewSong()`** — fetches the current title from VLC. If the title changed since the last call it emits `EVENT_NEW_SONG`. Either way it updates `_remainingTime` from the current song's remaining duration.
+**`triggerNewSong()`** — fetches the current title and file from VLC. If either changed since the last call it emits `EVENT_NEW_SONG` (the file matters: modules in a row often share an empty title). Either way it updates `_remainingTime` from the current song's remaining duration.
 
 **Events** (from `CONSTS.EVENTS`):
 
 | Event | Payload | When |
 |---|---|---|
-| `EVENT_NEW_SONG` | `{ title, remainingTime, file }` | Track changed |
+| `EVENT_NEW_SONG` | `{ title, file, remainingTime, elapsed, duration, next, program }` (`NewSongEvent`): times in seconds, `next` is the following file in the program or `null`, `program` the program's name or `''` | Track changed |
 | `EVENT_PLAYLIST_END` | — | VLC stopped playing |
 | `EVENT_ERROR` | `Error` | VLC unreachable or threw |
 

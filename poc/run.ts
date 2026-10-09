@@ -129,7 +129,7 @@ async function main(): Promise<void> {
 
     player.events.on(EVENTS.EVENT_NEW_SONG, ({ title, file, remainingTime }: { title: string; file: string; remainingTime: number }) => {
         log(`now playing: ${title || path.basename(file)} (${remainingTime}s)`);
-        framesProcess.stdin!.write(JSON.stringify({ title, file, duration: remainingTime }) + '\n');
+        framesProcess.stdin!.write(JSON.stringify({ title, file, elapsed: 0, duration: remainingTime }) + '\n');
     });
 
     const program = new Program();

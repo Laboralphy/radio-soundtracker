@@ -6,6 +6,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { NullSink } from './NullSink.js';
 import { buildEncoderArgs, redactOutput } from './encoder.js';
+import type { StandbyInfo } from './StandbyMonitor.js';
 import type { VLCControl } from '../vlc-control/VLCControl.js';
 import { logger } from '../logger/index.js';
 
@@ -36,7 +37,10 @@ export interface BroadcastOptions {
 export interface SongInfo {
     title: string;
     file: string;
+    elapsed: number;
     duration: number;
+    next: string | null;
+    program: string;
 }
 
 export const BROADCAST_EVENTS = {
@@ -122,9 +126,20 @@ export class Broadcast {
      * Tells the image program what is playing now.
      */
     setSong(song: SongInfo): void {
+        this._send({ type: 'song', ...song });
+    }
+
+    /**
+     * Tells the image program that nothing plays, and why.
+     */
+    setStandby(info: StandbyInfo): void {
+        this._send({ type: 'standby', ...info });
+    }
+
+    private _send(message: object): void {
         const stdin = this._framesProcess?.stdin;
         if (stdin && stdin.writable) {
-            stdin.write(JSON.stringify(song) + '\n');
+            stdin.write(JSON.stringify(message) + '\n');
         }
     }
 
@@ -137,16 +152,21 @@ export class Broadcast {
             return;
         }
         this._stopping = true;
+        if (this._framesProcess) {
+            this._framesProcess.kill();
+            await waitExit(this._framesProcess, 2000);
+        }
         if (this._ffmpegProcess) {
-            // SIGINT lets ffmpeg write the end of the file
+            // ffmpeg ignores SIGINT while waiting for frames: closing its input first ends that wait.
+            // SIGINT then lets it write the end of the file.
+            this._ffmpegProcess.stdin?.destroy();
             this._ffmpegProcess.kill('SIGINT');
             await waitExit(this._ffmpegProcess, 5000);
         }
-        const others = [this._framesProcess, this._vlcProcess].filter(p => p !== null);
-        for (const child of others) {
-            child.kill();
+        if (this._vlcProcess) {
+            this._vlcProcess.kill();
+            await waitExit(this._vlcProcess, 2000);
         }
-        await Promise.all(others.map(child => waitExit(child, 2000)));
         const ffmpegLog = this._ffmpegLog;
         this._ffmpegLog = null;
         ffmpegLog?.end();
@@ -205,13 +225,6 @@ export class Broadcast {
     private _startEncoder(): void {
         const o = this._options;
 
-        this._framesProcess = spawn(process.execPath, [...process.execArgv, FRAMES_PROGRAM, `${o.width}`, `${o.height}`, `${o.fps}`], {
-            ...CHILD_OPTIONS,
-            stdio: ['pipe', 'pipe', 'inherit'],
-        });
-        this._watch(this._framesProcess, 'Image program');
-        this._framesProcess.stdin!.on('error', () => {});
-
         mkdirSync(path.dirname(o.ffmpegLog), { recursive: true });
         this._ffmpegLog = createWriteStream(o.ffmpegLog, { flags: 'a' });
         this._ffmpegProcess = spawn('ffmpeg', buildEncoderArgs({
@@ -224,8 +237,14 @@ export class Broadcast {
             output: o.output,
         }), { ...CHILD_OPTIONS, stdio: ['pipe', 'ignore', 'pipe'] });
         this._watch(this._ffmpegProcess, 'ffmpeg');
-        this._ffmpegProcess.stdin!.on('error', () => {});
-        this._framesProcess.stdout!.pipe(this._ffmpegProcess.stdin!);
+
+        // the image program writes straight into ffmpeg's stdin: the frames (tens of MB/s) do not go through this process
+        this._framesProcess = spawn(process.execPath, [...process.execArgv, FRAMES_PROGRAM, `${o.width}`, `${o.height}`, `${o.fps}`], {
+            ...CHILD_OPTIONS,
+            stdio: ['pipe', this._ffmpegProcess.stdin!, 'inherit'],
+        });
+        this._watch(this._framesProcess, 'Image program');
+        this._framesProcess.stdin!.on('error', () => {});
 
         // ffmpeg quotes the output URL in its errors: hide the stream key before writing the log
         const redacted = redactOutput(o.output);

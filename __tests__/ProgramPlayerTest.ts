@@ -8,6 +8,7 @@ const { Program } = await import('../src/libs/vlc-control/Program.js');
 const { ProgramPlayer } = await import('../src/libs/vlc-control/ProgramPlayer.js');
 const { EVENTS } = await import('../src/libs/vlc-control/consts.js');
 import type { VLCControl } from '../src/libs/vlc-control/VLCControl.js';
+import type { NewSongEvent } from '../src/libs/vlc-control/ProgramPlayer.js';
 
 /**
  * VLCControl double: songs of a fixed length, played one after the other on a fake clock.
@@ -19,6 +20,10 @@ class FakeVLC {
     stopped = true;
     failures = 0;
     commands: string[] = [];
+    /**
+     * When set, every song reports this title (modules often have none).
+     */
+    title: string | null = null;
 
     private index(): number {
         return Math.floor((Date.now() - this.startedAt) / (this.songLength * 1000));
@@ -46,7 +51,7 @@ class FakeVLC {
         return { time: elapsed, total: this.songLength, remaining: this.songLength - elapsed };
     }
 
-    async getTitle() { return this.playlist[this.index()] ?? ''; }
+    async getTitle() { return this.title ?? this.playlist[this.index()] ?? ''; }
     async getStatus() { return `( new input: file://${this.playlist[this.index()]} )`; }
 }
 
@@ -90,6 +95,50 @@ describe('ProgramPlayer', () => {
         await vi.advanceTimersByTimeAsync(0);
         expect(files).toEqual(['/music/my song.mod']);
         player.stopDoomLoop();
+    });
+
+    it('gives the length, the next song and the program name', async () => {
+        const events: NewSongEvent[] = [];
+        player.events.on(EVENTS.EVENT_NEW_SONG, (event: NewSongEvent) => events.push(event));
+        const program = programOf('/a.mod', '/b.mod');
+        program.name = 'main';
+        const playing = player.playProgram(program);
+        await vi.advanceTimersByTimeAsync(25000);
+        await playing;
+        expect(events).toEqual([
+            { title: '/a.mod', file: '/a.mod', remainingTime: 10, elapsed: 0, duration: 10, next: '/b.mod', program: 'main' },
+            { title: '/b.mod', file: '/b.mod', remainingTime: 10, elapsed: 0, duration: 10, next: null, program: 'main' },
+        ]);
+    });
+
+    it('announces songs that share a title', async () => {
+        vlc.title = '';
+        const files: string[] = [];
+        player.events.on(EVENTS.EVENT_NEW_SONG, ({ file }: NewSongEvent) => files.push(file));
+        const playing = player.playProgram(programOf('/a.mod', '/b.mod'));
+        await vi.advanceTimersByTimeAsync(25000);
+        await playing;
+        expect(files).toEqual(['/a.mod', '/b.mod']);
+    });
+
+    it('finds the next song when a file appears twice', async () => {
+        const nexts: (string | null)[] = [];
+        player.events.on(EVENTS.EVENT_NEW_SONG, ({ next }: NewSongEvent) => nexts.push(next));
+        const playing = player.playProgram(programOf('/jingle.mod', '/a.mod', '/jingle.mod', '/b.mod'));
+        await vi.advanceTimersByTimeAsync(45000);
+        await playing;
+        expect(nexts).toEqual(['/a.mod', '/jingle.mod', '/b.mod', null]);
+    });
+
+    it('notices the end of the program quickly', async () => {
+        let endedAt = -1;
+        const start = Date.now();
+        void player.playProgram(programOf('/a.mod')).then(() => { endedAt = Date.now() - start; });
+        await vi.advanceTimersByTimeAsync(9900);
+        expect(endedAt).toBe(-1);
+        await vi.advanceTimersByTimeAsync(600);
+        expect(endedAt).toBeGreaterThanOrEqual(10000);
+        expect(endedAt).toBeLessThanOrEqual(10500);
     });
 
     it('tolerates a few failed polls', async () => {
