@@ -1,11 +1,11 @@
 /**
- * Proof of concept: the "image program".
+ * The "image program" of the broadcast.
  *
  * Writes raw RGBA frames to stdout, paced to real time, forever.
  * Reads song changes from stdin, one JSON object per line:
  *   {"title": "...", "file": "/path/song.mod", "duration": 123}
  *
- * Usage: node --import tsx poc/frames.ts [width] [height] [fps]
+ * Usage: node [--import tsx] frames.(ts|js) [width] [height] [fps]
  */
 import { createCanvas } from '@napi-rs/canvas';
 import path from 'node:path';

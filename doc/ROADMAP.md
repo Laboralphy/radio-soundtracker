@@ -149,9 +149,9 @@ YouTube Live accepts **video only** over RTMP(S). An audio-only stream is reject
   - [x] Image program (`poc/frames.ts`): copper bars, title sliding in or scrolling, file name, progress bar; fed by `EVENT_NEW_SONG`.
   - [x] Output H.264 854×480 30 fps (keyframe every 2 s) + AAC 160k in FLV. Steady 30 fps; title change within about 0.1–0.2 s of the audio.
 - [ ] Turn the PoC into real code:
-  - [ ] A `broadcast` command (or an option of `schedule`) that runs scheduler, image program and ffmpeg together.
-  - [ ] Settings in config: sink name, resolution, fps, bitrates, output URL (file for tests, RTMPS for YouTube).
-  - [ ] Create the null sink if missing, and do not unload it if it already existed.
+  - [x] A `broadcast` command (or an option of `schedule`) that runs scheduler, image program and ffmpeg together. *(done: `broadcast -c schedule.json -o out.flv`; starts its own VLC on the sink, or `--external-vlc`. If ffmpeg, VLC or the image program exits, everything stops with exit code 1 for a supervisor to restart.)*
+  - [x] Settings in config: sink name, resolution, fps, bitrates, output URL (file for tests, RTMPS for YouTube). *(done: `RADIO_SINK`, `RADIO_VIDEO_SIZE`, `RADIO_FPS`, `RADIO_VIDEO_BITRATE`, `RADIO_AUDIO_BITRATE`, `RADIO_OUTPUT` in `.env.example`, each with a command line option. The stream key is hidden in logs, including ffmpeg's (`logs/ffmpeg.log`).)*
+  - [x] Create the null sink if missing, and do not unload it if it already existed. *(done: `NullSink`)*
   - [ ] Send the image program richer song info: total length (not just remaining time), program name, next song.
 - [ ] Final encoder settings: CBR-ish (`-maxrate` = `-b:v`, `-bufsize` = 2×), `-tune stillimage` if the picture stays mostly still, AAC 128–192 kbps. Check the CPU cost at 720p vs 480p.
 - [ ] Test through a local RTMP server (`mediamtx` or `nginx-rtmp`) and watch with `ffplay`, to match YouTube's real input.
@@ -213,3 +213,5 @@ YouTube Live accepts **video only** over RTMP(S). An audio-only stream is reject
 | 2026-10-08 | Encode and send with **ffmpeg**, not OBS Studio | Headless, light, scriptable from Node; OBS needs a graphical session |
 | 2026-10-08 | Audio path **B** (VLC → PulseAudio null sink → ffmpeg) for Phase 1; **C** (libopenmpt in Node) as the later engine | Keeps the existing VLC code; validated by `poc/` |
 | 2026-10-08 | Video drawn by a **separate image program** (`@napi-rs/canvas`) piping raw RGBA frames; both ffmpeg inputs on the real clock | Free-form graphics; sync within about 0.2 s measured |
+| 2026-10-09 | `broadcast` command; the image program moves to `src/libs/broadcast/frames.ts` | PoC turned into real code; checked with a 3 min run (no silence, clean FLV on Ctrl+C) and by killing ffmpeg mid-run |
+| 2026-10-09 | Child processes (VLC, ffmpeg, image program) run in **their own process group** | Ctrl+C reached ffmpeg twice (terminal + our stop), so it quit without finishing the output. Under systemd (Phase 3), use `KillMode=mixed` so only Node gets SIGTERM and stops the others in order. |

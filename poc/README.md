@@ -4,7 +4,7 @@ Records a few minutes of "radio" to a local FLV file, using the architecture pla
 
 ```
 VLC ──► PulseAudio null sink "radio_poc" ──► ffmpeg input 0 (radio_poc.monitor)
-poc/frames.ts ──► raw RGBA frames on a pipe ──► ffmpeg input 1 ──► poc/out/test.flv
+src/libs/broadcast/frames.ts ──► raw RGBA frames on a pipe ──► ffmpeg input 1 ──► poc/out/test.flv
 ```
 
 - `run.ts` creates the virtual sink, starts VLC (RC port 4322, so it does not clash with a VLC on 1234), the frame program and ffmpeg, then plays a shuffled folder with the project's `ProgramPlayer`. On every `EVENT_NEW_SONG` it sends a JSON line to the frame program. When it finishes, it stops everything and removes the sink.

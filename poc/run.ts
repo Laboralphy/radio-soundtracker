@@ -1,8 +1,8 @@
 /**
- * Proof of concept: VLC renders the sound, poc/frames.ts renders the images, ffmpeg merges them.
+ * Proof of concept: VLC renders the sound, src/libs/broadcast/frames.ts renders the images, ffmpeg merges them.
  *
  *   VLC ──► PulseAudio null sink "radio_poc" ──► ffmpeg input 0 (radio_poc.monitor)
- *   frames.ts ──► raw RGBA on a pipe ─────────► ffmpeg input 1 ──► test.flv
+ *   src/libs/broadcast/frames.ts ──► raw RGBA on a pipe ──► ffmpeg input 1 ──► test.flv
  *
  * Usage: node --import tsx poc/run.ts [--music DIR] [--duration SECONDS] [--out FILE]
  * Needs: pactl (PulseAudio or PipeWire), cvlc, ffmpeg.
@@ -67,7 +67,7 @@ const vlcProcess = spawn('cvlc', ['--aout', 'pulse', '--extraintf', 'rc', '--rc-
 });
 
 // 3. the image program
-const framesProcess = spawn(process.execPath, ['--import', 'tsx', path.join('poc', 'frames.ts'), `${WIDTH}`, `${HEIGHT}`, `${FPS}`], {
+const framesProcess = spawn(process.execPath, ['--import', 'tsx', path.join('src', 'libs', 'broadcast', 'frames.ts'), `${WIDTH}`, `${HEIGHT}`, `${FPS}`], {
     stdio: ['pipe', 'pipe', 'inherit'],
 });
 

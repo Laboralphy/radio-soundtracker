@@ -33,5 +33,21 @@
     "newSong": "Now playing: {{title}} (duration: {{duration}}s)",
     "timeLimitReached": "Time limit reached ({{time}}), stopping playback",
     "done": "Playlist finished"
+  },
+  "broadcast": {
+    "describe": "Run the scheduler and stream it as video (VLC → virtual sound card → ffmpeg)",
+    "options": {
+      "output": "Output: a file (.flv) or an rtmp(s):// URL",
+      "sink": "Name of the PulseAudio/PipeWire null sink",
+      "size": "Video size, WIDTHxHEIGHT",
+      "fps": "Video frames per second",
+      "videoBitrate": "Video bitrate (e.g. 1500k)",
+      "audioBitrate": "Audio bitrate (e.g. 160k)",
+      "externalVlc": "Use the VLC already running instead of starting one (it must play into the sink)"
+    },
+    "stopping": "Stopping broadcast...",
+    "stopError": "Could not stop the broadcast cleanly: {{err}}",
+    "startError": "Could not start the broadcast: {{err}}",
+    "fatal": "Broadcast failed: {{reason}}"
   }
 }

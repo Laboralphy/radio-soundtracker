@@ -22,6 +22,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@napi-rs/canvas": "^1.0.10",
     "i18next": "^26.0.3",
     "i18next-fs-backend": "^2.6.3",
     "node-cron": "^4.1.1",
@@ -32,7 +33,6 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@napi-rs/canvas": "^1.0.10",
     "@types/node": "^25.5.2",
     "@types/yargs": "^17.0.35",
     "esbuild": "^0.27.7",

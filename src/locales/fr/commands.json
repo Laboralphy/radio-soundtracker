@@ -33,5 +33,21 @@
     "newSong": "Lecture: {{title}} (durée: {{duration}}s)",
     "timeLimitReached": "Durée limite atteinte ({{time}}), arrêt de la lecture",
     "done": "Playlist terminée"
+  },
+  "broadcast": {
+    "describe": "Lance le planificateur et le diffuse en vidéo (VLC → carte son virtuelle → ffmpeg)",
+    "options": {
+      "output": "Sortie : un fichier (.flv) ou une URL rtmp(s)://",
+      "sink": "Nom de la sortie virtuelle PulseAudio/PipeWire (null sink)",
+      "size": "Taille de la vidéo, LARGEURxHAUTEUR",
+      "fps": "Images par seconde",
+      "videoBitrate": "Débit vidéo (ex : 1500k)",
+      "audioBitrate": "Débit audio (ex : 160k)",
+      "externalVlc": "Utilise le VLC déjà lancé au lieu d'en démarrer un (il doit jouer dans la sortie virtuelle)"
+    },
+    "stopping": "Arrêt de la diffusion...",
+    "stopError": "Impossible d'arrêter proprement la diffusion : {{err}}",
+    "startError": "Impossible de démarrer la diffusion : {{err}}",
+    "fatal": "La diffusion a échoué : {{reason}}"
   }
 }
